@@ -1,0 +1,108 @@
+name: vacancy-desk
+
+x-build: &build
+    context: .
+    dockerfile: config/docker/python.local.Dockerfile
+    target: base
+
+services:
+  app:
+    build:
+      <<: *build
+    tty: true
+    env_file:
+      - config/local.env
+    ports:
+      - '8000:8000'
+    volumes:
+      - ./src:/app/src
+      - ./config/config.yaml:/app/config/config.yaml:ro
+      - ./frontend/dist:/app/src/dist
+    command:
+      [
+        'uvicorn',
+        'src.main:app',
+        '--host', '0.0.0.0',
+        '--port', '8000',
+        '--reload',
+        '--reload-dir', '/app/src',
+      ]
+    depends_on: [postgres]
+
+  worker:
+    build:
+      <<: *build
+    tty: true
+    env_file:
+      - config/local.env
+    environment:
+      PROCRASTINATE_APP: src.services.worker.app
+    volumes:
+      - ./src:/app/src
+      - ./config/config.yaml:/app/config/config.yaml:ro
+    command:
+      [
+        'watchfiles',
+        '--filter', 'python',
+        'python -m src.services.run worker',
+        '/app/src',
+      ]
+    depends_on: [postgres]
+
+  pytest:
+    build:
+      <<: *build
+      target: dev
+    env_file:
+      - config/test.env
+    volumes:
+      - ./src:/app/src
+      - ./tests:/app/tests
+      - ./config/config.yaml:/app/config/config.yaml:ro
+    entrypoint: ['pytest']
+    command: ['-v']
+
+  lint-mypy:
+    build:
+      <<: *build
+      target: dev
+    env_file:
+      - config/local.env
+    volumes:
+      - ./src:/app/src
+      - ./tests:/app/tests
+      - ./pyproject.toml:/app/pyproject.toml:ro
+    command: [ 'sh', '-c', 'ruff format . && ruff check --fix . && mypy src' ]
+
+  alembic:
+    build:
+      <<: *build
+      target: dev
+    env_file:
+      - config/local.env
+    volumes:
+      - ./src:/app/src
+      - ./config/config.yaml:/app/config/config.yaml:ro
+      - ./alembic:/app/alembic
+      - ./alembic.ini:/app/alembic.ini:ro
+    entrypoint: ['alembic']
+    depends_on: [postgres]
+
+  postgres:
+    image: pgvector/pgvector:pg18
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pass
+      POSTGRES_DB: jobs
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    # healthcheck:
+    #   test: ['CMD-SHELL', 'pg_isready -U user -d jobs']
+    #   interval: 5s
+    #   timeout: 5s
+    #   retries: 10
+
+volumes:
+  postgres_data:
