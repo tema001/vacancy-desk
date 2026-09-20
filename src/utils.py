@@ -222,16 +222,16 @@ async def process_vacancy_page(job: ParseJob) -> None:
             await db.insert_vacancies_activity(
                 conn, data={'vacancy_id': vacancy_id, 'date_started': page.timestamp}
             )
-            if job.content_hash:  # vacancy already parsed and has a hash
+            # vacancy already parsed and has a hash
+            if job.content_hash:
                 print('Deleting previous vacancy extract!')
-                # await db.delete_vacancy_extract(conn, vacancy_id)
+                await db.delete_vacancy_extract(conn, vacancy_id)
             defer_extract = True
         else:
             await db.update_vacancy(conn, vacancy_id, data=page.to_db())
             await db.close_vacancies_activity(conn, vacancy_id, date_ended=page.timestamp)
 
     if defer_extract:
-        return
         from src.tasks import extract_vacancy
 
         with suppress(AlreadyEnqueued):
@@ -276,16 +276,35 @@ async def get_scored_vacancies(params: ScoringParamsSchema) -> DataDict:
 async def _add_vacancy_skill_and_lexicon(
     conn: AsyncConnection, vacancy_id: str, data: VacancyLLMExtract
 ) -> None:
-    lexicon_data = [
-        {'skill_name': skill.canonical, 'kind': skill.kind} for skill in data.skills
-    ]
-    new_lexicon = await db.upsert_skill_lexicon(conn, data=lexicon_data)
-    print('new_lexicon', new_lexicon)
+    for skill in data.skills:
+        name = skill.canonical
+        skill.canonical = name[:1].upper() + name[1:]
+
+    missing_names = set(
+        await db.select_new_skill_lexicon(
+            conn, data=[skill.canonical for skill in data.skills]
+        )
+    )
+    matched: dict[str, str] = {}
+    if missing_names:
+        new_skills = [s for s in data.skills if s.canonical in missing_names]
+        rows = await db.select_skill_lexicon_matches(
+            conn, data=[skill.normalized for skill in new_skills]
+        )
+
+        matched = {row['s_norm']: row['skill_name'] for row in rows}
+        lexicon_data = [
+            {'skill_name': skill.canonical, 'kind': skill.kind}
+            for skill in new_skills
+            if skill.normalized not in matched
+        ]
+        if lexicon_data:
+            await db.insert_skill_lexicon(conn, lexicon_data)
 
     skills_data = [
         {
             'vacancy_id': vacancy_id,
-            'skill_name': skill.canonical,
+            'skill_name': matched.get(skill.normalized, skill.canonical),
             'depth': skill.depth,
             'importance': skill.importance,
         }
@@ -348,10 +367,6 @@ async def process_vacancy_extract(vacancy_id: str) -> None:
         print('Vacancy extract. Skills list is empty!')
         return
 
-    for skill in data.skills:
-        name = skill.canonical
-        skill.canonical = name[:1].upper() + name[1:]
-
     async with resources.engine.connect() as conn:
         await db.insert_vacancy_extract(
             conn,
@@ -361,7 +376,6 @@ async def process_vacancy_extract(vacancy_id: str) -> None:
                 'job_family': data.job_family,
                 'industry': data.industry,
                 'raw_response': raw_resp,
-                'completeness': 1.0,
             },
         )
         await conn.commit()

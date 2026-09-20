@@ -58,9 +58,13 @@ services:
     volumes:
       - ./src:/app/src
       - ./tests:/app/tests
+      - ./pyproject.toml:/app/pyproject.toml:ro
       - ./config/config.yaml:/app/config/config.yaml:ro
-    entrypoint: ['pytest']
+      - ./alembic:/app/alembic
+      - ./alembic.ini:/app/alembic.ini:ro
+    entrypoint: ['sh', '-c', 'alembic upgrade head && exec pytest "$@"', 'pytest']
     command: ['-v']
+    depends_on: [postgres-test]
 
   lint-mypy:
     build:
@@ -103,6 +107,26 @@ services:
     #   interval: 5s
     #   timeout: 5s
     #   retries: 10
+
+  postgres-test:
+    image: pgvector/pgvector:pg18
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: pass
+      POSTGRES_DB: jobs_test
+    command:
+      [
+        'postgres',
+        '-c', 'fsync=off',
+        '-c', 'synchronous_commit=off',
+        '-c', 'full_page_writes=off',
+        '-c', 'autovacuum=off',
+        '-c', 'wal_level=minimal',
+        '-c', 'max_wal_senders=0',
+        '-c', 'shared_buffers=128MB',
+        '-c', 'work_mem=16MB',
+        '-c', 'max_wal_size=1GB',
+      ]
 
 volumes:
   postgres_data:

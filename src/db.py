@@ -395,19 +395,84 @@ async def delete_vacancy_extract(conn: AsyncConnection, vacancy_id: str) -> None
     )
 
 
-async def upsert_skill_lexicon(
-    conn: AsyncConnection, data: DataDict | list[DataDict]
+async def select_skill_lexicon_matches(
+    conn: AsyncConnection, data: Sequence[str]
+) -> Sequence[RowMapping]:
+    q = (
+        sa.values(sa.column('s_norm', sa.Text), name='q')
+        .data([(name,) for name in data])
+        .cte('q')
+    )
+
+    sl_n = SkillLexicon.skill_name_norm
+
+    same_stems = func.to_tsvector('english', sl_n) == func.to_tsvector(
+        'english', q.c.s_norm
+    )
+    trgm_similar = func.similarity(sl_n, q.c.s_norm)
+    len_abs = func.abs(func.length(sl_n) - func.length(q.c.s_norm))
+
+    lat = (
+        sa.select(
+            SkillLexicon.skill_name,
+            trgm_similar.label('trgm_similar'),
+        )
+        .select_from(SkillLexicon)
+        .where(
+            sa.or_(
+                sa.and_(same_stems, trgm_similar >= 0.75),
+                sa.and_(len_abs <= 4, trgm_similar >= 0.61),
+            )
+        )
+        .order_by(same_stems.desc(), trgm_similar.desc())
+        .limit(1)
+        .lateral()
+    )
+
+    return await select_all(
+        conn,
+        stmt=(
+            sa.select(q.c.s_norm, lat.c.skill_name, lat.c.trgm_similar)
+            .select_from(q)
+            .join(lat, sa.true())
+        ),
+    )
+
+
+async def select_new_skill_lexicon(
+    conn: AsyncConnection, data: Sequence[str]
 ) -> list[str]:
+    q = (
+        sa.values(sa.column('skill_name', sa.Text), name='q')
+        .data([(name,) for name in data])
+        .cte('q')
+    )
     rows = await select_all(
         conn,
         stmt=(
-            insert(SkillLexicon)
-            .values(data)
-            .on_conflict_do_nothing(index_elements=['skill_name'])
-            .returning(SkillLexicon.skill_name)
+            sa.select(q.c.skill_name).where(
+                ~sa.exists().where(SkillLexicon.skill_name == q.c.skill_name)
+            )
         ),
     )
+
+    if not rows:
+        return []
+
     return [row['skill_name'] for row in rows]
+
+
+async def insert_skill_lexicon(
+    conn: AsyncConnection, data: DataDict | list[DataDict]
+) -> None:
+    await conn.execute(
+        statement=(
+            insert(SkillLexicon)
+            .values(data)
+            # several workers can insert the same skill at the same time
+            .on_conflict_do_nothing(index_elements=['skill_name'])
+        ),
+    )
 
 
 async def select_skill_lexicon_for_expand(conn: AsyncConnection, limit: int) -> list[str]:
@@ -488,4 +553,4 @@ async def update_skill_lexicon_embed(
 async def insert_vacancy_skills(
     conn: AsyncConnection, data: DataDict | list[DataDict]
 ) -> None:
-    await conn.execute(statement=(insert(VacancySkill).values(data)))
+    await conn.execute(insert(VacancySkill).values(data))

@@ -2,6 +2,7 @@ from datetime import datetime
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
+    Computed,
     DateTime,
     ForeignKey,
     Index,
@@ -100,6 +101,13 @@ class SkillLexicon(Base):
     __tablename__ = 'skill_lexicon'
 
     skill_name: Mapped[str] = mapped_column(Text, primary_key=True)
+    skill_name_norm: Mapped[str] = mapped_column(
+        Computed(
+            func.trim(func.regexp_replace(func.lower(skill_name), r'[/_.\-]+', ' ', 'g')),
+            persisted=True,
+        )
+    )
+
     kind: Mapped[SkillKind] = mapped_column(SmallIntEnum(SkillKind))
     expanded: Mapped[str | None]
     expanded_vector: Mapped[list[float] | None] = mapped_column(Vector(1536))
@@ -120,7 +128,6 @@ class VacancyExtract(Base):
     prompt_version: Mapped[str]
     industry: Mapped[str | None]
     raw_response: Mapped[str]
-    completeness: Mapped[float]
 
     date_created: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=func.now()

@@ -1,4 +1,5 @@
 import hashlib
+import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
@@ -45,6 +46,10 @@ class ExtractedSkill(BaseModel):
     importance: float = Field(ge=0, le=1)
     depth: EnumField[SkillDepth]
     kind: EnumField[SkillKind] = Field(default=SkillKind.hard)
+
+    @cached_property
+    def normalized(self) -> str:
+        return re.sub(r'[/_.\-]+', ' ', self.canonical.lower()).strip()
 
 
 class VacancyLLMExtract(BaseModel):
