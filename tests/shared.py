@@ -1,10 +1,17 @@
+from collections.abc import Sequence
+
+import sqlalchemy as sa
+from sqlalchemy.engine.result import RowMapping
 from sqlalchemy.ext.asyncio.engine import AsyncConnection
+
 from src.db import (
     insert_and_reactivate_vacancies,
     insert_skill_lexicon,
     insert_vacancy_extract,
+    select_all,
 )
 from src.enums import JobFamily, SkillKind, Source, Status
+from src.models import SkillLexicon, VacancySkill
 
 
 async def prepare_vacancy(
@@ -64,3 +71,23 @@ async def prepare_skill_lexicon(
     kind: SkillKind = SkillKind.hard,
 ) -> None:
     await insert_skill_lexicon(conn, data={'skill_name': skill_name, 'kind': kind})
+
+
+async def select_lexicon_rows(conn: AsyncConnection) -> Sequence[RowMapping]:
+    return await select_all(
+        conn,
+        stmt=sa.select(SkillLexicon).order_by(SkillLexicon.skill_name),
+    )
+
+
+async def select_vacancy_skill_rows(
+    conn: AsyncConnection, vacancy_id: str
+) -> Sequence[RowMapping]:
+    return await select_all(
+        conn,
+        stmt=(
+            sa.select(VacancySkill)
+            .where(VacancySkill.vacancy_id == vacancy_id)
+            .order_by(VacancySkill.skill_name)
+        ),
+    )

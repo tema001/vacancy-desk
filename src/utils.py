@@ -291,6 +291,7 @@ async def _add_vacancy_skill_and_lexicon(
         rows = await db.select_skill_lexicon_matches(
             conn, data=[skill.normalized for skill in new_skills]
         )
+        print('Matched lexicon', rows)
 
         matched = {row['s_norm']: row['skill_name'] for row in rows}
         lexicon_data = [
@@ -301,16 +302,23 @@ async def _add_vacancy_skill_and_lexicon(
         if lexicon_data:
             await db.insert_skill_lexicon(conn, lexicon_data)
 
-    skills_data = [
-        {
-            'vacancy_id': vacancy_id,
-            'skill_name': matched.get(skill.normalized, skill.canonical),
-            'depth': skill.depth,
-            'importance': skill.importance,
-        }
-        for skill in data.skills
-    ]
-    await db.insert_vacancy_skills(conn, data=skills_data)
+    unique_skills: dict[str, DataDict] = {}
+    for skill in data.skills:
+        name = matched.get(skill.normalized) or skill.canonical
+        existing = unique_skills.get(name)
+        if existing is None:
+            unique_skills[name] = {
+                'vacancy_id': vacancy_id,
+                'skill_name': name,
+                'depth': skill.depth,
+                'importance': skill.importance,
+            }
+            continue
+
+        existing['depth'] = max(existing['depth'], skill.depth)
+        existing['importance'] = max(existing['importance'], skill.importance)
+
+    await db.insert_vacancy_skills(conn, data=list(unique_skills.values()))
     await conn.commit()
 
 
