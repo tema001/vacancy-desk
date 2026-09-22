@@ -2,12 +2,21 @@ import { useState, type FormEvent } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { fetchVacancies } from './api'
 import type {
+  EnglishLevel,
   VacancyOrder,
   VacancySource,
 } from './types'
 
 const categoryOptions = ['Python', 'ML/AI']
 const pageSizes = [10, 25, 50]
+const englishLevelOptions: { value: EnglishLevel; label: string }[] = [
+  { value: 1, label: 'A1' },
+  { value: 2, label: 'A2' },
+  { value: 3, label: 'B1' },
+  { value: 4, label: 'B2' },
+  { value: 5, label: 'C1' },
+  { value: 6, label: 'C2' },
+]
 const filtersPanelStorageKey = 'vacancy-desk:filters-panel-open'
 const sourceLabels: Record<VacancySource, string> = {
   1: 'Djinni',
@@ -142,9 +151,153 @@ function haveSameCategories(left: string[], right: string[]): boolean {
   )
 }
 
+function stripNonDigits(value: string): string {
+  return value.replace(/\D/g, '')
+}
+
+function parseOptionalInt(
+  value: string,
+  min: number,
+  max: number,
+): number | null | 'invalid' {
+  if (value === '') {
+    return null
+  }
+
+  if (!/^\d+$/.test(value)) {
+    return 'invalid'
+  }
+
+  const parsed = Number(value)
+
+  if (!Number.isInteger(parsed) || parsed < min || parsed > max) {
+    return 'invalid'
+  }
+
+  return parsed
+}
+
+function parseEngLvl(value: string): EnglishLevel | null {
+  if (value === '') {
+    return null
+  }
+
+  const parsed = Number(value)
+
+  if (
+    parsed === 1 ||
+    parsed === 2 ||
+    parsed === 3 ||
+    parsed === 4 ||
+    parsed === 5 ||
+    parsed === 6
+  ) {
+    return parsed
+  }
+
+  return null
+}
+
+interface VacancyFilters {
+  categories: string[]
+  exp: number | null
+  salaryMin: number | null
+  engLvl: EnglishLevel | null
+  activeOnly: boolean
+}
+
+function getInitialFilters(): VacancyFilters {
+  const searchParams = new URLSearchParams(window.location.search)
+  const categories = [
+    ...new Set(
+      searchParams
+        .getAll('category')
+        .filter((category) => categoryOptions.includes(category)),
+    ),
+  ]
+  const exp = parseOptionalInt(searchParams.get('exp') ?? '', 1, 19)
+  const salaryMin = parseOptionalInt(
+    searchParams.get('salary_min') ?? '',
+    1,
+    99999,
+  )
+
+  return {
+    categories,
+    exp: exp === 'invalid' ? null : exp,
+    salaryMin: salaryMin === 'invalid' ? null : salaryMin,
+    engLvl: parseEngLvl(searchParams.get('eng_lvl') ?? ''),
+    activeOnly: searchParams.get('active_only') === '1',
+  }
+}
+
+function saveFiltersToSearch(filters: VacancyFilters): void {
+  const url = new URL(window.location.href)
+
+  url.searchParams.delete('category')
+  filters.categories.forEach((category) => {
+    url.searchParams.append('category', category)
+  })
+
+  if (filters.exp === null) {
+    url.searchParams.delete('exp')
+  } else {
+    url.searchParams.set('exp', String(filters.exp))
+  }
+
+  if (filters.salaryMin === null) {
+    url.searchParams.delete('salary_min')
+  } else {
+    url.searchParams.set('salary_min', String(filters.salaryMin))
+  }
+
+  if (filters.engLvl === null) {
+    url.searchParams.delete('eng_lvl')
+  } else {
+    url.searchParams.set('eng_lvl', String(filters.engLvl))
+  }
+
+  if (filters.activeOnly) {
+    url.searchParams.set('active_only', '1')
+  } else {
+    url.searchParams.delete('active_only')
+  }
+
+  window.history.replaceState(window.history.state, '', url)
+}
+
 export function VacanciesPage() {
-  const [categories, setCategories] = useState<string[]>([])
-  const [activeCategories, setActiveCategories] = useState<string[]>([])
+  const [initialFilters] = useState(getInitialFilters)
+  const [categories, setCategories] = useState<string[]>([
+    ...initialFilters.categories,
+  ])
+  const [activeCategories, setActiveCategories] = useState<string[]>([
+    ...initialFilters.categories,
+  ])
+  const [expDraft, setExpDraft] = useState(
+    initialFilters.exp === null ? '' : String(initialFilters.exp),
+  )
+  const [salaryDraft, setSalaryDraft] = useState(
+    initialFilters.salaryMin === null ? '' : String(initialFilters.salaryMin),
+  )
+  const [engLvlDraft, setEngLvlDraft] = useState(
+    initialFilters.engLvl === null ? '' : String(initialFilters.engLvl),
+  )
+  const [activeOnlyDraft, setActiveOnlyDraft] = useState(
+    initialFilters.activeOnly,
+  )
+  const [activeExp, setActiveExp] = useState<number | null>(initialFilters.exp)
+  const [activeSalaryMin, setActiveSalaryMin] = useState<number | null>(
+    initialFilters.salaryMin,
+  )
+  const [activeEngLvl, setActiveEngLvl] = useState<EnglishLevel | null>(
+    initialFilters.engLvl,
+  )
+  const [activeActiveOnly, setActiveActiveOnly] = useState(
+    initialFilters.activeOnly,
+  )
+  const [expInvalid, setExpInvalid] = useState(false)
+  const [salaryInvalid, setSalaryInvalid] = useState(false)
   const [isFiltersPanelOpen, setIsFiltersPanelOpen] = useState(
     getInitialFiltersPanelState,
   )
@@ -157,6 +310,10 @@ export function VacanciesPage() {
     limit: pageSize,
     order,
     page,
+    exp: activeExp,
+    salary_min: activeSalaryMin,
+    eng_lvl: activeEngLvl,
+    active_only: activeActiveOnly,
   }
   const vacanciesQuery = useQuery({
     queryKey: ['vacancies', vacancyParams],
@@ -168,26 +325,49 @@ export function VacanciesPage() {
   const pageStart = (page - 1) * pageSize
   const firstRow = totalCount === 0 ? 0 : pageStart + 1
   const hasNextPage = vacanciesQuery.data?.has_next ?? false
+  const activeFilterCount =
+    Number(activeCategories.length > 0) +
+    Number(activeExp !== null) +
+    Number(activeSalaryMin !== null) +
+    Number(activeEngLvl !== null) +
+    Number(activeActiveOnly)
+  const parsedExpDraft = parseOptionalInt(expDraft, 1, 19)
+  const parsedSalaryDraft = parseOptionalInt(salaryDraft, 1, 99999)
+  const filtersChanged =
+    !haveSameCategories(categories, activeCategories) ||
+    parsedExpDraft === 'invalid' ||
+    parsedExpDraft !== activeExp ||
+    parsedSalaryDraft === 'invalid' ||
+    parsedSalaryDraft !== activeSalaryMin ||
+    parseEngLvl(engLvlDraft) !== activeEngLvl ||
+    activeOnlyDraft !== activeActiveOnly
 
   function setFiltersPanelOpen(isOpen: boolean): void {
     setIsFiltersPanelOpen(isOpen)
     saveFiltersPanelState(isOpen)
   }
 
-  function applyCategories(nextCategories: string[]): void {
-    const categoriesUnchanged = haveSameCategories(
-      nextCategories,
-      activeCategories,
-    )
+  function applyFilters(next: VacancyFilters): void {
+    const filtersUnchanged =
+      haveSameCategories(next.categories, activeCategories) &&
+      next.exp === activeExp &&
+      next.salaryMin === activeSalaryMin &&
+      next.engLvl === activeEngLvl &&
+      next.activeOnly === activeActiveOnly
     setPage(1)
+    saveFiltersToSearch(next)
 
-    if (categoriesUnchanged && page === 1) {
+    if (filtersUnchanged && page === 1) {
       void vacanciesQuery.refetch()
       return
     }
 
-    if (!categoriesUnchanged) {
-      setActiveCategories([...nextCategories])
+    if (!filtersUnchanged) {
+      setActiveCategories([...next.categories])
+      setActiveExp(next.exp)
+      setActiveSalaryMin(next.salaryMin)
+      setActiveEngLvl(next.engLvl)
+      setActiveActiveOnly(next.activeOnly)
     }
   }
 
@@ -199,14 +379,63 @@ export function VacanciesPage() {
     )
   }
 
+  function handleExpChange(value: string): void {
+    const digits = stripNonDigits(value)
+    setExpDraft(digits)
+
+    if (parseOptionalInt(digits, 1, 19) !== 'invalid') {
+      setExpInvalid(false)
+    }
+  }
+
+  function handleSalaryChange(value: string): void {
+    const digits = stripNonDigits(value)
+    setSalaryDraft(digits)
+
+    if (parseOptionalInt(digits, 1, 99999) !== 'invalid') {
+      setSalaryInvalid(false)
+    }
+  }
+
   function handleSubmit(event: FormEvent<HTMLFormElement>): void {
     event.preventDefault()
-    applyCategories(categories)
+
+    const expResult = parseOptionalInt(expDraft, 1, 19)
+    const salaryResult = parseOptionalInt(salaryDraft, 1, 99999)
+    const nextExpInvalid = expResult === 'invalid'
+    const nextSalaryInvalid = salaryResult === 'invalid'
+
+    setExpInvalid(nextExpInvalid)
+    setSalaryInvalid(nextSalaryInvalid)
+
+    if (nextExpInvalid || nextSalaryInvalid) {
+      return
+    }
+
+    applyFilters({
+      categories,
+      exp: expResult,
+      salaryMin: salaryResult,
+      engLvl: parseEngLvl(engLvlDraft),
+      activeOnly: activeOnlyDraft,
+    })
   }
 
   function handleReset(): void {
     setCategories([])
-    applyCategories([])
+    setExpDraft('')
+    setSalaryDraft('')
+    setEngLvlDraft('')
+    setActiveOnlyDraft(false)
+    setExpInvalid(false)
+    setSalaryInvalid(false)
+    applyFilters({
+      categories: [],
+      exp: null,
+      salaryMin: null,
+      engLvl: null,
+      activeOnly: false,
+    })
   }
 
   function handleSort(): void {
@@ -236,8 +465,15 @@ export function VacanciesPage() {
                 <path d="M4 6h16M7 12h10m-7 6h4" />
               </svg>
               Filters
-              {activeCategories.length > 0 ? (
-                <span className="filter-indicator" aria-hidden="true" />
+              {activeFilterCount > 0 ? (
+                <span
+                  className="filter-indicator"
+                  aria-label={`${activeFilterCount} active ${
+                    activeFilterCount === 1 ? 'filter' : 'filters'
+                  }`}
+                >
+                  {activeFilterCount}
+                </span>
               ) : null}
             </button>
             <button
@@ -257,37 +493,103 @@ export function VacanciesPage() {
         {isFiltersPanelOpen ? (
           <section className="filter-panel" id="filters-panel">
             <form className="filter-form" onSubmit={handleSubmit}>
-              <span className="filter-label">Categories</span>
-              <div className="filter-controls">
-                <details className="category-select">
-                  <summary>
-                    {categories.length > 0
-                      ? categories.join(', ')
-                      : 'All categories'}
-                  </summary>
-                  <div className="category-options">
-                    {categoryOptions.map((category) => (
-                      <label key={category}>
-                        <input
-                          type="checkbox"
-                          checked={categories.includes(category)}
-                          onChange={() => toggleCategory(category)}
-                        />
-                        {category}
-                      </label>
+              <div className="filter-fields">
+                <div className="filter-field filter-field-category">
+                  <span className="filter-label">Categories</span>
+                  <details className="category-select">
+                    <summary>
+                      {categories.length > 0
+                        ? categories.join(', ')
+                        : 'All categories'}
+                    </summary>
+                    <div className="category-options">
+                      {categoryOptions.map((category) => (
+                        <label key={category}>
+                          <input
+                            type="checkbox"
+                            checked={categories.includes(category)}
+                            onChange={() => toggleCategory(category)}
+                          />
+                          {category}
+                        </label>
+                      ))}
+                    </div>
+                  </details>
+                </div>
+
+                <label className="filter-field">
+                  <span className="filter-label">Experience</span>
+                  <input
+                    className={
+                      expInvalid ? 'filter-input is-invalid' : 'filter-input'
+                    }
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    value={expDraft}
+                    aria-invalid={expInvalid}
+                    onChange={(event) => handleExpChange(event.target.value)}
+                  />
+                </label>
+                <label className="filter-field">
+                  <span className="filter-label">Min salary</span>
+                  <input
+                    className={
+                      salaryInvalid
+                        ? 'filter-input is-invalid'
+                        : 'filter-input'
+                    }
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    value={salaryDraft}
+                    aria-invalid={salaryInvalid}
+                    onChange={(event) =>
+                      handleSalaryChange(event.target.value)
+                    }
+                  />
+                </label>
+                <label className="filter-field">
+                  <span className="filter-label">English</span>
+                  <select
+                    className="filter-select"
+                    value={engLvlDraft}
+                    onChange={(event) => setEngLvlDraft(event.target.value)}
+                  >
+                    <option value="">Any</option>
+                    {englishLevelOptions.map((level) => (
+                      <option key={level.value} value={String(level.value)}>
+                        {level.label}
+                      </option>
                     ))}
-                  </div>
-                </details>
-                <button
-                  type="button"
-                  className="text-button"
-                  onClick={handleReset}
-                >
-                  Reset
-                </button>
-                <button type="submit" className="primary-button">
-                  Apply filters
-                </button>
+                  </select>
+                </label>
+                <label className="filter-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={activeOnlyDraft}
+                    onChange={(event) =>
+                      setActiveOnlyDraft(event.target.checked)
+                    }
+                  />
+                  Active only
+                </label>
+                <div className="filter-actions">
+                  <button
+                    type="button"
+                    className="text-button"
+                    onClick={handleReset}
+                  >
+                    Reset
+                  </button>
+                  <button
+                    type="submit"
+                    className="primary-button"
+                    disabled={!filtersChanged}
+                  >
+                    Apply filters
+                  </button>
+                </div>
               </div>
             </form>
           </section>
@@ -295,7 +597,7 @@ export function VacanciesPage() {
 
         <section className="results-panel" aria-labelledby="results-heading">
           <div className="results-toolbar">
-            <div>
+            <div className="results-heading">
               <div className="results-title-row">
                 <h2 id="results-heading">Results</h2>
                 <span className="count-badge">{totalCount}</span>
@@ -333,29 +635,32 @@ export function VacanciesPage() {
                     ))}
                   </select>
                 </label>
-                <span className="page-summary">
-                  Rows {firstRow}–{pageStart + vacancies.length} of {totalCount}
-                </span>
-                <div className="page-controls">
-                  <button
-                    type="button"
-                    className="pagination-button"
-                    onClick={() => setPage(page - 1)}
-                    disabled={page === 1 || vacanciesQuery.isFetching}
-                    aria-label="Previous page"
-                  >
-                    ‹
-                  </button>
-                  <span>Page {page}</span>
-                  <button
-                    type="button"
-                    className="pagination-button"
-                    onClick={() => setPage(page + 1)}
-                    disabled={!hasNextPage || vacanciesQuery.isFetching}
-                    aria-label="Next page"
-                  >
-                    ›
-                  </button>
+                <div className="pagination-navigation">
+                  <span className="page-summary">
+                    Rows {firstRow}–{pageStart + vacancies.length} of{' '}
+                    {totalCount}
+                  </span>
+                  <div className="page-controls">
+                    <button
+                      type="button"
+                      className="pagination-button"
+                      onClick={() => setPage(page - 1)}
+                      disabled={page === 1 || vacanciesQuery.isFetching}
+                      aria-label="Previous page"
+                    >
+                      ‹
+                    </button>
+                    <span>Page {page}</span>
+                    <button
+                      type="button"
+                      className="pagination-button"
+                      onClick={() => setPage(page + 1)}
+                      disabled={!hasNextPage || vacanciesQuery.isFetching}
+                      aria-label="Next page"
+                    >
+                      ›
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

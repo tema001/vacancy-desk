@@ -61,8 +61,13 @@ a:focus-visible {
   background: var(--accent);
 }
 
-.primary-button:hover {
+.primary-button:hover:not(:disabled) {
   background: var(--accent-hover);
+}
+
+.primary-button:disabled {
+  color: var(--text-muted);
+  background: var(--surface-hover);
 }
 
 .secondary-button {
@@ -145,7 +150,7 @@ a:focus-visible {
 }
 
 .filter-form {
-  max-width: 540px;
+  max-width: none;
 }
 
 .filter-label {
@@ -156,13 +161,83 @@ a:focus-visible {
   font-weight: 650;
 }
 
-.filter-controls {
+.filter-actions {
   display: flex;
+  flex: 0 0 auto;
   gap: 9px;
+  align-self: flex-end;
+}
+
+.filter-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 14px;
+  align-items: flex-end;
+}
+
+.filter-field {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 0;
+}
+
+.filter-field:has(.filter-input) {
+  width: 100px;
+}
+
+.filter-field:has(.filter-select),
+.filter-field-category {
+  width: 180px;
+}
+
+.filter-field .filter-label {
+  margin-bottom: 6px;
+}
+
+.filter-input,
+.filter-select {
+  width: 100%;
+  height: 35px;
+  min-width: 0;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--text);
+  background: var(--surface-raised);
+  font-size: 0.86rem;
+}
+
+.filter-input:hover,
+.filter-select:hover {
+  border-color: #454b45;
+}
+
+.filter-input.is-invalid {
+  border-color: #c44848;
+}
+
+.filter-checkbox {
+  display: inline-flex;
+  height: 35px;
+  flex: 0 0 auto;
+  gap: 9px;
+  align-items: center;
+  color: var(--text);
+  font-size: 0.83rem;
+  cursor: pointer;
+}
+
+.filter-checkbox input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--accent);
 }
 
 .category-select {
   position: relative;
+  width: 100%;
 }
 
 .category-select summary {
@@ -257,6 +332,10 @@ a:focus-visible {
   justify-content: space-between;
   padding: 12px 17px;
   border-bottom: 1px solid var(--border);
+}
+
+.results-heading {
+  min-width: 0;
 }
 
 .results-title-row {
@@ -605,6 +684,13 @@ time {
   background: var(--surface-raised);
 }
 
+.pagination-navigation {
+  display: flex;
+  min-width: 0;
+  gap: 18px;
+  align-items: center;
+}
+
 .page-summary {
   white-space: nowrap;
 }
@@ -648,13 +734,40 @@ time {
   main {
     padding-top: 42px;
   }
+}
 
+@media (max-width: 630px) {
   .results-toolbar {
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px 18px;
   }
 
-  .results-actions {
-    width: 100%;
+  .results-heading {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .results-actions,
+  .pagination {
+    display: contents;
+  }
+
+  .pagination label {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+
+  .query-status {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .pagination-navigation {
+    grid-column: 2;
+    grid-row: 2;
+    justify-self: end;
   }
 }
 
@@ -667,25 +780,40 @@ time {
     margin-bottom: 15px;
   }
 
-  .filter-controls {
-    flex-wrap: wrap;
+  .filter-field-category {
+    width: 100%;
   }
 
-  .category-select {
-    flex-basis: 100%;
+  .filter-field:has(.filter-input),
+  .filter-field:has(.filter-select),
+  .filter-checkbox {
+    width: auto;
+    flex: 1 1 calc(50% - 7px);
   }
 
-  .text-button,
-  .primary-button {
-    flex: 1 1 auto;
+  .filter-checkbox {
+    height: auto;
+    min-height: 35px;
+  }
+
+  .filter-actions {
+    width: 100%;
+  }
+
+  .filter-actions > button {
+    flex: 1 1 0;
   }
 
   .results-toolbar {
     min-height: 72px;
+    column-gap: 12px;
     padding: 14px 17px;
   }
 
   .query-status {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    justify-self: end;
     font-size: 0;
   }
 
@@ -693,14 +821,22 @@ time {
     display: block;
   }
 
-  .pagination {
-    flex-wrap: wrap;
-    gap: 15px 22px;
+  .pagination-navigation {
+    width: 100%;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    gap: 12px;
     justify-content: flex-end;
-    padding: 0;
+  }
+
+  .page-summary {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .page-controls {
+    flex: 0 0 auto;
     justify-content: flex-end;
   }
 }

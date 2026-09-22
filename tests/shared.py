@@ -3,7 +3,6 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from sqlalchemy.engine.result import RowMapping
 from sqlalchemy.ext.asyncio.engine import AsyncConnection
-
 from src.db import (
     insert_and_reactivate_vacancies,
     insert_skill_lexicon,
