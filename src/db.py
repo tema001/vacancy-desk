@@ -180,21 +180,38 @@ async def select_vacancies(
     if params.exp:
         filters.append(Vacancy.experience <= params.exp * 12.0)
 
-    if params.salary:
+    if params.salary_min:
         filters.append(
-            sa.or_(Vacancy.salary_min >= params.salary, Vacancy.salary_level.isnot(None))
+            sa.or_(
+                Vacancy.salary_min >= params.salary_min, Vacancy.salary_level.isnot(None)
+            )
         )
 
-    lat = (
-        sa.select(VacanciesActivity.date_started)
-        .where(Vacancy.id == VacanciesActivity.vacancy_id)
-        .order_by(_order(VacanciesActivity.date_started))
-        .limit(1)
-        .lateral()
-    )
+    if params.eng_lvl:
+        filters.append(Vacancy.english_level <= params.eng_lvl)
+
+    if params.active_only:
+        _from = Vacancy.__table__.join(
+            VacanciesActivity,
+            sa.and_(
+                Vacancy.id == VacanciesActivity.vacancy_id,
+                VacanciesActivity.date_ended.is_(None),
+            ),
+        )
+        c_date_started = VacanciesActivity.date_started
+    else:
+        lat = (
+            sa.select(VacanciesActivity.date_started)
+            .where(Vacancy.id == VacanciesActivity.vacancy_id)
+            .order_by(_order(VacanciesActivity.date_started))
+            .limit(1)
+            .lateral()
+        )
+        _from = Vacancy.__table__.join(lat, sa.true())
+        c_date_started = lat.c.date_started
 
     total_count = await conn.scalar(
-        sa.select(func.count()).select_from(Vacancy).join(lat, sa.true()).where(*filters)
+        sa.select(func.count()).select_from(_from).where(*filters)
     )
 
     if not total_count:
@@ -214,13 +231,12 @@ async def select_vacancies(
             Vacancy.salary_level,
             Vacancy.experience,
             Vacancy.status,
-            lat.c.date_started,
+            c_date_started,
             # func.count().over().label('count'),
         )
-        .select_from(Vacancy)
-        .join(lat, sa.true())
+        .select_from(_from)
         .where(*filters)
-        .order_by(_order(lat.c.date_started))
+        .order_by(_order(c_date_started))
         .offset(params.offset)
         .limit(params.limit + 1)
     )
@@ -250,9 +266,11 @@ async def select_vacancy_skill_matches(
                 Vacancy.english_level <= params.english_level,
             )
         )
-    if params.salary:
+    if params.salary_min:
         filters.append(
-            sa.or_(Vacancy.salary_min >= params.salary, Vacancy.salary_level.isnot(None))
+            sa.or_(
+                Vacancy.salary_min >= params.salary_min, Vacancy.salary_level.isnot(None)
+            )
         )
 
     if params.job_family:

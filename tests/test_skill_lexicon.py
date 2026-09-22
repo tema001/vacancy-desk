@@ -119,11 +119,7 @@ async def test_mixes_existing_match_and_new_skills(db) -> None:
         lexicon_rows = await select_lexicon_rows(conn)
         vacancy_rows = await select_vacancy_skill_rows(conn, vacancy_id)
 
-    expected = [
-        'FastAPI',
-        'Python',
-        'Vector database'
-    ]
+    expected = ['FastAPI', 'Python', 'Vector database']
     assert [row['skill_name'] for row in lexicon_rows] == expected
     assert [row['skill_name'] for row in vacancy_rows] == expected
 

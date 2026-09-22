@@ -18,12 +18,17 @@ export interface Vacancy {
 }
 
 export type VacancyOrder = 1 | 2
+export type EnglishLevel = 1 | 2 | 3 | 4 | 5 | 6
 
 export interface VacancyParams {
   categories: string[] | null
   limit: number
   order: VacancyOrder
   page: number
+  exp: number | null
+  salary_min: number | null
+  eng_lvl: EnglishLevel | null
+  active_only: boolean
 }
 
 export interface VacanciesPage {

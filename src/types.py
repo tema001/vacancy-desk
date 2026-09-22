@@ -16,11 +16,15 @@ type DataDict = dict[str, Any]
 
 
 class ParamsSchema(BaseModel):
-    exp: int | None = Field(default=None, gt=0, lt=20)
-    salary: int | None = Field(default=None, gt=0, lt=100_000)
+    exp: int | None = Field(default=None, gt=0, lt=20)  # years
+    salary_min: int | None = Field(default=None, gt=0, lt=100_000)
     categories: (
         list[Annotated[str, StringConstraints(min_length=1, max_length=20)]] | None
     ) = Field(default=None, max_length=10)
+    eng_lvl: EnglishLevel | None = None
+
+    active_only: bool = False
+
     limit: int = Field(default=10, gt=0, le=100)
     order: int = Field(default=2, gt=0, le=2)  # 1 = asc, 2 = desc
     page: int = Field(default=1, gt=0, le=100)
