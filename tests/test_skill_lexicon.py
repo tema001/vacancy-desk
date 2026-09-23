@@ -85,6 +85,34 @@ async def test_links_spelling_variant_to_existing_skill(db) -> None:
     assert vacancy_rows[0]['skill_name'] == 'Vector database'
 
 
+async def test_does_not_link_cpp_to_csharp_or_cpp17(db) -> None:
+    async with resources.engine.connect() as conn:
+        await prepare_skill_lexicon(conn, 'C#')
+        vacancy_id = await prepare_vacancy(conn)
+        await prepare_vacancy_extract(conn, vacancy_id)
+
+        await _add_vacancy_skill_and_lexicon(conn, vacancy_id, _extract('C++'))
+
+        lexicon_rows = await select_lexicon_rows(conn)
+        vacancy_rows = await select_vacancy_skill_rows(conn, vacancy_id)
+
+    assert [row['skill_name'] for row in lexicon_rows] == ['C#', 'C++']
+    assert [row['skill_name'] for row in vacancy_rows] == ['C++']
+
+    async with resources.engine.connect() as conn:
+        vacancy_id = await prepare_vacancy(
+            conn, external_id='test-2', url='https://example.com/2'
+        )
+        await prepare_vacancy_extract(conn, vacancy_id)
+        await _add_vacancy_skill_and_lexicon(conn, vacancy_id, _extract('C++17'))
+
+        lexicon_rows = await select_lexicon_rows(conn)
+        vacancy_rows = await select_vacancy_skill_rows(conn, vacancy_id)
+
+    assert [row['skill_name'] for row in lexicon_rows] == ['C#', 'C++', 'C++17']
+    assert [row['skill_name'] for row in vacancy_rows] == ['C++17']
+
+
 async def test_does_not_link_opengl_to_opengles(db) -> None:
     async with resources.engine.connect() as conn:
         await prepare_skill_lexicon(conn, 'OpenGL')

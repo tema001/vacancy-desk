@@ -429,6 +429,8 @@ async def select_skill_lexicon_matches(
     )
     trgm_similar = func.similarity(sl_n, q.c.s_norm)
     len_abs = func.abs(func.length(sl_n) - func.length(q.c.s_norm))
+    # pg_trgm and to_tsvector drop '+'/'#', so fuzzy-match only plain names
+    has_mark = sl_n.op('~')('[+#]') | q.c.s_norm.op('~')('[+#]')
 
     lat = (
         sa.select(
@@ -438,8 +440,14 @@ async def select_skill_lexicon_matches(
         .select_from(SkillLexicon)
         .where(
             sa.or_(
-                sa.and_(same_stems, trgm_similar >= 0.75),
-                sa.and_(len_abs <= 4, trgm_similar >= 0.61),
+                sl_n == q.c.s_norm,
+                sa.and_(
+                    ~has_mark,
+                    sa.or_(
+                        sa.and_(same_stems, trgm_similar >= 0.75),
+                        sa.and_(len_abs <= 4, trgm_similar >= 0.61),
+                    ),
+                ),
             )
         )
         .order_by(same_stems.desc(), trgm_similar.desc())
