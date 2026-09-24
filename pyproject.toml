@@ -10,21 +10,25 @@ requires-python = ">=3.13"
 dependencies = [
     "asyncpg>=0.31.0",
     "envyaml>=1.10.211231",
-    "fastapi>=0.141.1",
-    "feedparser>=6.0.14",
     "httpx2>=2.12.0",
     "langfuse>=4.15.2",
     "openai>=3.12.0",
-    "parsel>=1.11.0",
     "pgvector>=0.5.0",
     "procrastinate>=3.9.0",
     "psycopg[binary]>=3.3.5",
     "sqlalchemy[asyncio]>=2.0.52",
-    "uvicorn>=0.52.4",
     "watchfiles>=1.2.0",
 ]
 
 [dependency-groups]
+http-service = [
+    "fastapi>=0.141.1",
+    "uvicorn>=0.52.4",
+]
+worker = [
+    "feedparser>=6.0.14",
+    "parsel>=1.11.0",
+]
 dev = [
     "alembic>=1.19.2",
     "mypy>=2.3.0",
@@ -72,6 +76,7 @@ pretty = true
 module = [
     "fastapi.*",
     "uvicorn.*",
+    "feedparser",
     "geonamescache",
     "geonamescache.*",
     "langfuse",

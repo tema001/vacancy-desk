@@ -1,4 +1,5 @@
 import asyncio
+import importlib
 from collections.abc import Awaitable
 from typing import Any
 
@@ -19,7 +20,6 @@ async def job_timeout(call_next, context: JobContext, worker: Worker) -> Awaitab
 
 app = procrastinate.App(
     connector=procrastinate.PsycopgConnector(conninfo=config['db']['dsn']),
-    import_paths=['src.tasks', 'src.cron'],
     worker_defaults={
         'concurrency': 3,
         'shutdown_graceful_timeout': 2.0,
@@ -30,6 +30,9 @@ app = procrastinate.App(
 
 
 async def run() -> None:
+    importlib.import_module('src.cron')
+    importlib.import_module('src.tasks')
+
     await resources.start(start_llm=True)
     try:
         async with app.open_async():
