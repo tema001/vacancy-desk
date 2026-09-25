@@ -3,12 +3,12 @@ name: vacancy-desk
 x-build: &build
     context: .
     dockerfile: config/docker/python.local.Dockerfile
-    target: base
 
 services:
   app:
     build:
       <<: *build
+      target: http-service
     tty: true
     env_file:
       - config/local.env
@@ -32,6 +32,7 @@ services:
   worker:
     build:
       <<: *build
+      target: worker
     tty: true
     env_file:
       - config/local.env
