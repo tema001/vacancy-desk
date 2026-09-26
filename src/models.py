@@ -51,7 +51,8 @@ class Vacancy(Base):
     title: Mapped[str] = mapped_column(Text)
     description: Mapped[str] = mapped_column(Text)
     url: Mapped[str] = mapped_column(Text)
-    content_hash: Mapped[bytes] = mapped_column(LargeBinary(32))
+    params_hash: Mapped[bytes | None] = mapped_column(LargeBinary(32))
+    description_hash: Mapped[bytes | None] = mapped_column(LargeBinary(32))
 
     location_str: Mapped[str | None] = mapped_column(Text)
     location: Mapped[list[str] | None] = mapped_column(ARRAY(Text))

@@ -90,6 +90,17 @@ class ParsedPage:
 
 
 @dataclass
+class InactivePage(ParsedPage):
+    status: Status = Status.inactive
+
+    def to_db(self) -> DataDict:
+        return {
+            **self.last_seen(),
+            'params_hash': None,
+        }
+
+
+@dataclass
 class FullParsedPage(ParsedPage):
     company: str
     title: str
@@ -105,18 +116,26 @@ class FullParsedPage(ParsedPage):
     seniority: Seniority | None = None
 
     @cached_property
-    def content_hash(self) -> bytes:
+    def params_hash(self) -> bytes:
         _data = (
             f'{self.title},'
-            f'{self.description},'
             f'{self.salary_min},'
             f'{self.salary_max},'
-            f'{self.salary_level}'
+            f'{self.salary_level},'
+            f'{self.experience},'
+            f'{self.english_level}'
         )
         return hashlib.sha256(_data.encode()).digest()
 
-    def same_content(self, stored: bytes | None) -> bool:
-        return stored == self.content_hash
+    @cached_property
+    def description_hash(self) -> bytes:
+        return hashlib.sha256(self.description.encode()).digest()
+
+    def same_params(self, stored: bytes | None) -> bool:
+        return stored == self.params_hash
+
+    def same_description(self, stored: bytes | None) -> bool:
+        return stored == self.description_hash
 
     def to_db(self) -> DataDict:
         return {
@@ -134,7 +153,8 @@ class FullParsedPage(ParsedPage):
             ###
             'status': self.status,
             'date_last_seen': self.timestamp,
-            'content_hash': self.content_hash,
+            'params_hash': self.params_hash,
+            'description_hash': self.description_hash,
         }
 
 
@@ -142,12 +162,14 @@ class FullParsedPage(ParsedPage):
 class ParseJob:
     vacancy_id: str
     url: str
-    content_hash: bytes | None
+    params_hash: bytes | None
+    desc_hash: bytes | None
 
     @classmethod
     def from_db(cls, data: Mapping[str, Any]) -> 'ParseJob':
         return cls(
             vacancy_id=data['id'],
             url=data['url'],
-            content_hash=data['content_hash'],
+            params_hash=data['params_hash'],
+            desc_hash=data['description_hash'],
         )

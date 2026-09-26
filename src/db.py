@@ -79,7 +79,7 @@ async def close_vacancies_activity(
     )
 
 
-async def select_vacancy_by_id(
+async def select_vacancy_for_extract(
     conn: AsyncConnection, vacancy_id: str
 ) -> RowMapping | None:
     return await select_one(
@@ -87,6 +87,22 @@ async def select_vacancy_by_id(
         stmt=(
             sa.select(
                 Vacancy.title, Vacancy.category, Vacancy.experience, Vacancy.description
+            ).where(Vacancy.id == vacancy_id)
+        ),
+    )
+
+
+async def select_vacancy_for_parse(
+    conn: AsyncConnection, vacancy_id: str
+) -> RowMapping | None:
+    return await select_one(
+        conn,
+        stmt=(
+            sa.select(
+                Vacancy.id,
+                Vacancy.url,
+                Vacancy.params_hash,
+                Vacancy.description_hash,
             ).where(Vacancy.id == vacancy_id)
         ),
     )
@@ -152,7 +168,7 @@ async def select_vacancies_to_process(
         status_stmt = Vacancy.status.in_((Status.new, Status.active))
 
     stmt = (
-        sa.select(Vacancy.id, Vacancy.url, Vacancy.content_hash)
+        sa.select(Vacancy.id)
         .where(
             sa.or_(
                 Vacancy.date_last_seen.is_(None),

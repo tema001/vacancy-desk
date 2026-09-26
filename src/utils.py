@@ -17,6 +17,7 @@ from src.shared.resources import resources
 from src.types import (
     DataDict,
     FullParsedPage,
+    InactivePage,
     LexiconExpand,
     ParsedPage,
     ParseJob,
@@ -65,7 +66,6 @@ async def process_feed(category: str) -> None:
                 'url': url,
                 'description': '',
                 'company': '',
-                'content_hash': b'',
             }
         )
 
@@ -87,7 +87,7 @@ async def parse_vacancy_page(body: str) -> ParsedPage:
         .get()
     )
     if inactive:
-        return ParsedPage(Status.inactive)
+        return InactivePage()
 
     ld_raw = sel.css('script[type="application/ld+json"]::text').get()
     if ld_raw is None:
@@ -202,7 +202,7 @@ async def process_vacancy_page(job: ParseJob) -> None:
         page = await parse_vacancy_page(body)
     except HTTPStatusError as err:
         if err.response.status_code == 404:
-            page = ParsedPage(Status.inactive)
+            page = InactivePage()
         else:
             raise err
 
@@ -211,22 +211,29 @@ async def process_vacancy_page(job: ParseJob) -> None:
 
     async with resources.engine.begin() as conn:
         if isinstance(page, FullParsedPage):
-            if page.same_content(job.content_hash):
+            params_same = page.same_params(job.params_hash)
+            desc_same = page.same_description(job.desc_hash)
+
+            if params_same and desc_same:
                 await db.update_vacancy(conn, vacancy_id, data=page.last_seen())
                 return
 
             await db.update_vacancy(conn, vacancy_id, data=page.to_db())
-            await db.insert_vacancies_activity(
-                conn, data={'vacancy_id': vacancy_id, 'date_started': page.timestamp}
-            )
-            # vacancy already parsed and has a hash
-            if job.content_hash:
-                print('Deleting previous vacancy extract!')
-                await db.delete_vacancy_extract(conn, vacancy_id)
-            defer_extract = True
-        else:
+            if job.params_hash is None:
+                await db.insert_vacancies_activity(
+                    conn, data={'vacancy_id': vacancy_id, 'date_started': page.timestamp}
+                )
+            if not desc_same:
+                if job.desc_hash:
+                    print('Deleting previous vacancy extract!')
+                    await db.delete_vacancy_extract(conn, vacancy_id)
+                defer_extract = True
+
+        elif isinstance(page, InactivePage):
             await db.update_vacancy(conn, vacancy_id, data=page.to_db())
             await db.close_vacancies_activity(conn, vacancy_id, date_ended=page.timestamp)
+        else:
+            raise ValueError
 
     if defer_extract:
         from src.tasks import extract_vacancy
@@ -306,7 +313,7 @@ async def process_vacancy_extract(vacancy_id: str) -> None:
 
                 return
 
-        row = await db.select_vacancy_by_id(conn, vacancy_id)
+        row = await db.select_vacancy_for_extract(conn, vacancy_id)
 
     if not row:
         print(f'No vacancy! vacancy_id: {vacancy_id}')
