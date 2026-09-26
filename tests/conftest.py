@@ -2,6 +2,8 @@ import pytest
 import sqlalchemy as sa
 from src.shared.resources import resources
 
+from tests.shared import ParseMock
+
 
 @pytest.fixture(scope='session')
 async def init_resources():
@@ -20,3 +22,8 @@ async def db(init_resources):
                 ' vacancies, skill_lexicon RESTART IDENTITY CASCADE'
             )
         )
+
+
+@pytest.fixture
+def parse_mock(monkeypatch: pytest.MonkeyPatch) -> ParseMock:
+    return ParseMock(monkeypatch)

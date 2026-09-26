@@ -24,12 +24,15 @@ async def process_feed(*, category: str) -> None:
 
 
 @app.task(name=PARSE_VACANCY, retry=RetryStrategy(max_attempts=2, wait=60))
-async def parse_vacancy(*, vacancy_id: str, url: str, content_hash: str | None) -> None:
-    _hash = bytes.fromhex(content_hash) if content_hash else None
+async def parse_vacancy(*, vacancy_id: str) -> None:
+    async with resources.engine.connect() as conn:
+        row = await db.select_vacancy_for_parse(conn, vacancy_id)
 
-    await utils.process_vacancy_page(
-        ParseJob(vacancy_id=vacancy_id, url=url, content_hash=_hash),
-    )
+    if not row:
+        print(f'No vacancy! vacancy_id: {vacancy_id}')
+        return
+
+    await utils.process_vacancy_page(ParseJob.from_db(row))
 
 
 @app.task(name=EXTRACT_VACANCY, retry=RetryStrategy(max_attempts=2, wait=30))
@@ -73,10 +76,6 @@ async def enqueue_vacancies(status: Status | None = None) -> None:
                 queueing_lock=f'parse:{lock_id}',
                 lock=lock_id,
                 schedule_in={'milliseconds': int(schedule_sec * 1000)},
-            ).defer_async(
-                vacancy_id=row['id'],
-                url=row['url'],
-                content_hash=row['content_hash'].hex() if row['content_hash'] else None,
-            )
+            ).defer_async(vacancy_id=row['id'])
         except exceptions.AlreadyEnqueued:
             pass
