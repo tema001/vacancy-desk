@@ -4,11 +4,18 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
 from functools import cached_property
-from typing import Annotated, Any
+from typing import Annotated, Any, Self
 
 from pydantic import BaseModel, Field, StringConstraints
 
-from src.enums import EnglishLevel, JobFamily, Seniority, SkillDepth, SkillKind, Status
+from src.enums import (
+    EnglishLevel,
+    JobFamily,
+    Seniority,
+    SkillDepth,
+    SkillKind,
+    VacancyStatus,
+)
 from src.shared.types import EnumField
 from src.shared.utils import dt_now
 
@@ -45,9 +52,8 @@ class ScoringParamsSchema(ParamsSchema):
     english_level: EnumField[EnglishLevel] | None = None
 
 
-class ExtractedSkill(BaseModel):
+class SkillExtract(BaseModel):
     canonical: str
-    importance: float = Field(ge=0, le=1)
     depth: EnumField[SkillDepth]
     kind: EnumField[SkillKind] = Field(default=SkillKind.hard)
 
@@ -55,11 +61,32 @@ class ExtractedSkill(BaseModel):
     def normalized(self) -> str:
         return re.sub(r'[/_.\-]+', ' ', self.canonical.lower()).strip()
 
+    def prefer(self, other: Self) -> Self:
+        return other if other.depth > self.depth else self
+
+
+class VacancySkillExtract(SkillExtract):
+    importance: float = Field(ge=0, le=1)
+
+    def prefer(self, other: Self) -> Self:
+        if other.depth != self.depth:
+            return other if other.depth > self.depth else self
+        return other if other.importance > self.importance else self
+
 
 class VacancyLLMExtract(BaseModel):
     job_family: EnumField[JobFamily]
     industry: str | None = None
-    skills: list[ExtractedSkill]
+    skills: list[VacancySkillExtract]
+
+
+class ProfileLLMExtract(BaseModel):
+    skills: list[SkillExtract]
+
+    job_families: list[EnumField[JobFamily]] | None = Field(default=None, max_length=10)
+    experience: float | None = None  # month
+    eng_lvl: EnumField[EnglishLevel] | None = None
+    seniority: EnumField[Seniority] | None = None
 
 
 class LexiconItem(BaseModel):
@@ -73,7 +100,7 @@ class LexiconExpand(BaseModel):
 
 @dataclass
 class ParsedPage:
-    status: Status
+    status: VacancyStatus
 
     @cached_property
     def timestamp(self) -> datetime:
@@ -91,7 +118,7 @@ class ParsedPage:
 
 @dataclass
 class InactivePage(ParsedPage):
-    status: Status = Status.inactive
+    status: VacancyStatus = VacancyStatus.inactive
 
     def to_db(self) -> DataDict:
         return {
@@ -105,7 +132,7 @@ class FullParsedPage(ParsedPage):
     company: str
     title: str
     description: str
-    status: Status
+    status: VacancyStatus
     location_str: str | None
     location: list[str] | None
     experience: float | None = None

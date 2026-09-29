@@ -4,9 +4,10 @@ from datetime import timedelta
 from procrastinate import RetryStrategy, exceptions
 
 from src import db, utils
-from src.enums import Status
+from src.enums import VacancyStatus
 from src.jobs import (
     ENQUEUE_VACANCIES,
+    EXTRACT_PROFILE,
     EXTRACT_VACANCY,
     LEXICON_EMBED,
     LEXICON_EXPAND,
@@ -40,6 +41,11 @@ async def extract_vacancy(*, vacancy_id: str) -> None:
     await utils.process_vacancy_extract(vacancy_id)
 
 
+@app.task(name=EXTRACT_PROFILE, retry=RetryStrategy(max_attempts=2, wait=30))
+async def extract_profile(*, profile_id: str) -> None:
+    await utils.process_new_profile(profile_id)
+
+
 @app.task(
     name=LEXICON_EXPAND,
     queueing_lock='lexicon_expand',
@@ -61,7 +67,7 @@ async def lexicon_embed() -> None:
 
 
 @app.task(name=ENQUEUE_VACANCIES, queueing_lock='enqueue_vacancies')
-async def enqueue_vacancies(status: Status | None = None) -> None:
+async def enqueue_vacancies(status: VacancyStatus | None = None) -> None:
     async with resources.engine.connect() as conn:
         rows = await db.select_vacancies_to_process(
             conn, time_from=timedelta(hours=4), status=status

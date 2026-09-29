@@ -1,6 +1,7 @@
 from collections.abc import Callable
 from enum import IntEnum
 from typing import Annotated, Any
+from uuid import UUID
 
 from pydantic import GetCoreSchemaHandler, GetPydanticSchema
 from pydantic_core import CoreSchema, core_schema
@@ -52,3 +53,10 @@ def _enum_schema(source: type[IntEnum], handler: GetCoreSchemaHandler) -> CoreSc
 
 
 type EnumField[E: IntEnum] = Annotated[E, GetPydanticSchema(_enum_schema)]
+
+
+def uuid_schema(value: str) -> str:
+    parsed = UUID(value)
+    if parsed.version != 7:
+        raise ValueError('UUID version 7 required')
+    return str(parsed)
