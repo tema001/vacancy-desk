@@ -7,13 +7,16 @@ from sqlalchemy.engine.result import RowMapping
 from sqlalchemy.ext.asyncio.engine import AsyncConnection
 from sqlalchemy.sql import Executable, asc, desc, func
 
+from src.enums import ProfileStatus
 from src.models import (
+    Profile,
+    ProfileSkill,
     SkillLexicon,
-    Status,
     VacanciesActivity,
     Vacancy,
     VacancyExtract,
     VacancySkill,
+    VacancyStatus,
 )
 from src.types import DataDict, ParamsSchema, ScoringParamsSchema
 
@@ -36,8 +39,8 @@ async def insert_and_reactivate_vacancies(
             .values(data)
             .on_conflict_do_update(
                 index_elements=[Vacancy.source, Vacancy.external_id],
-                set_={'status': Status.new, 'date_last_seen': None},
-                where=(Vacancy.status == Status.inactive),
+                set_={'status': VacancyStatus.pending, 'date_last_seen': None},
+                where=(Vacancy.status == VacancyStatus.inactive),
             )
             .returning(Vacancy.id)
         ),
@@ -126,7 +129,7 @@ async def select_vacancy_extract_info(
                 )
             )
             .where(VacancyExtract.vacancy_id == vacancy_id)
-            .group_by(VacancyExtract.prompt_version)
+            .group_by(VacancyExtract.vacancy_id)
         ),
     )
 
@@ -147,7 +150,7 @@ async def select_vacancy_extract_response(
 
 
 async def select_vacancies_to_process(
-    conn: AsyncConnection, time_from: timedelta, status: Status | None
+    conn: AsyncConnection, time_from: timedelta, status: VacancyStatus | None
 ) -> Sequence[RowMapping]:
     busy = sa.exists(
         sa.text(
@@ -165,7 +168,7 @@ async def select_vacancies_to_process(
     if status:
         status_stmt = Vacancy.status == status
     else:
-        status_stmt = Vacancy.status.in_((Status.new, Status.active))
+        status_stmt = Vacancy.status.in_((VacancyStatus.pending, VacancyStatus.active))
 
     stmt = (
         sa.select(Vacancy.id)
@@ -267,7 +270,7 @@ async def select_vacancy_skill_matches(
 ) -> Sequence[RowMapping]:
 
     _from = Vacancy.__table__
-    filters = [Vacancy.status == Status.active]
+    filters = [Vacancy.status == VacancyStatus.active]
     if params.exp:
         filters.append(
             sa.or_(
@@ -596,3 +599,97 @@ async def insert_vacancy_skills(
     conn: AsyncConnection, data: DataDict | list[DataDict]
 ) -> None:
     await conn.execute(insert(VacancySkill).values(data))
+
+
+async def select_profile(conn: AsyncConnection, profile_id: str) -> RowMapping | None:
+    return await select_one(
+        conn,
+        stmt=(
+            sa.select(
+                Profile.id,
+                Profile.text,
+                Profile.job_families,
+                Profile.experience,
+                Profile.english_level,
+                Profile.seniority,
+                Profile.status,
+            ).where(Profile.id == profile_id)
+        ),
+    )
+
+
+async def select_profile_skills(
+    conn: AsyncConnection, profile_id: str
+) -> Sequence[RowMapping]:
+    return await select_all(
+        conn,
+        stmt=(
+            sa.select(
+                ProfileSkill.skill_name,
+                ProfileSkill.depth,
+            )
+            .where(ProfileSkill.profile_id == profile_id)
+            .order_by(ProfileSkill.depth.desc())
+        ),
+    )
+
+
+async def select_pending_profile_id(conn: AsyncConnection) -> str | None:
+    row = await select_one(
+        conn,
+        stmt=(
+            sa.select(Profile.id)
+            .where(Profile.status == ProfileStatus.pending)
+            .order_by(Profile.date_created)
+        ),
+    )
+    return row['id'] if row else None
+
+
+async def insert_profile_text(conn: AsyncConnection, text: str) -> str:
+    row = await select_one(
+        conn,
+        stmt=(
+            insert(Profile)
+            .values(text=text, status=ProfileStatus.pending)
+            .returning(Profile.id)
+        ),
+    )
+    assert row
+    return row['id']
+
+
+async def update_profile(conn: AsyncConnection, profile_id: str, data: DataDict) -> None:
+    stmt = sa.update(Profile).values(data).where(Profile.id == profile_id)
+    await conn.execute(stmt)
+
+
+async def insert_profile_skills(
+    conn: AsyncConnection, data: DataDict | list[DataDict]
+) -> None:
+    await conn.execute(insert(ProfileSkill).values(data))
+
+
+async def select_profile_extract_info(
+    conn: AsyncConnection, profile_id: str
+) -> RowMapping | None:
+    return await select_one(
+        conn,
+        stmt=(
+            sa.select(
+                Profile.text,
+                Profile.raw_response,
+                Profile.status,
+                sa.func.count(ProfileSkill.id).label('skill_count'),
+            )
+            .select_from(
+                Profile.__table__.join(
+                    ProfileSkill,
+                    Profile.id == ProfileSkill.profile_id,
+                    isouter=True,
+                )
+            )
+            .where(Profile.id == profile_id)
+            .group_by(Profile.id)
+        ),
+    )

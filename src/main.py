@@ -3,12 +3,15 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import FastAPI, Query
+from fastapi import Body, FastAPI, HTTPException, Query, status
 from fastapi.staticfiles import StaticFiles
+from pydantic import AfterValidator
 
+import src.db as db
 import src.queries as queries
 from src.jobs import (
     ENQUEUE_VACANCIES,
+    EXTRACT_PROFILE,
     EXTRACT_VACANCY,
     LEXICON_EMBED,
     LEXICON_EXPAND,
@@ -16,6 +19,7 @@ from src.jobs import (
 )
 from src.services.worker import app as worker
 from src.shared.resources import resources
+from src.shared.types import uuid_schema
 from src.types import DataDict, ParamsSchema, ScoringParamsSchema
 
 
@@ -57,6 +61,40 @@ async def get_vacancies(params: ParamsSchema) -> DataDict:
 @app.post('/api/vacancies/score')
 async def get_scored_vacancies(params: ScoringParamsSchema) -> DataDict:
     return await queries.get_scored_vacancies(params)
+
+
+@app.post('/api/profiles', status_code=status.HTTP_202_ACCEPTED)
+async def create_new_profile(
+    text: Annotated[str, Body(min_length=10, max_length=5000, embed=True)],
+) -> DataDict:
+    async with resources.engine.begin() as conn:
+        pending_id = await db.select_pending_profile_id(conn)
+        if pending_id:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={'profile_id': pending_id},
+            )
+
+        profile_id = await db.insert_profile_text(conn, text)
+
+    await worker.configure_task(
+        EXTRACT_PROFILE,
+        queueing_lock=f'profile-extract:{profile_id}',
+        lock=profile_id,
+    ).defer_async(profile_id=profile_id)
+
+    return {'id': profile_id}
+
+
+@app.get('/api/profiles/{profile_id}')
+async def get_profile(
+    profile_id: Annotated[str, AfterValidator(uuid_schema)],
+) -> DataDict:
+    profile = await queries.get_profile(profile_id)
+    if profile is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+
+    return profile
 
 
 @app.get('/api/ai/extract')

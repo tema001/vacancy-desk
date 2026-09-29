@@ -3,7 +3,7 @@ from datetime import timedelta
 from typing import Any
 
 from sqlalchemy.ext.asyncio.engine import AsyncConnection
-from src.enums import EnglishLevel, Seniority, Status
+from src.enums import EnglishLevel, Seniority, VacancyStatus
 from src.shared.resources import resources
 from src.shared.utils import dt_now
 from src.types import FullParsedPage, InactivePage
@@ -22,7 +22,7 @@ from tests.shared import (
 )
 
 PARSED_DATA: dict[str, Any] = {
-    'status': Status.active,
+    'status': VacancyStatus.active,
     'company': 'Acme',
     'description': 'desc',
     'location_str': 'Europe, Ukraine, Kyiv',
@@ -63,7 +63,7 @@ async def test_new_vacancy_opens_activity_and_extracts(db, parse_mock: ParseMock
         activities = await select_activity_rows(conn, vacancy_id)
 
     assert vacancy
-    assert vacancy['status'] == Status.active
+    assert vacancy['status'] == VacancyStatus.active
     assert vacancy['company'] == page.company
     assert vacancy['description'] == page.description
     assert vacancy['params_hash'] == page.params_hash
@@ -166,7 +166,7 @@ async def test_inactive_page_clears_params_hash_and_closes_activity(
         extract = await select_extract_row(conn, vacancy_id)
 
     assert vacancy
-    assert vacancy['status'] == Status.inactive
+    assert vacancy['status'] == VacancyStatus.inactive
     assert vacancy['params_hash'] is None
     assert len(activities) == 1
     assert activities[0]['date_ended']
@@ -189,7 +189,7 @@ async def test_not_found_clears_params_hash_and_closes_activity(
         activities = await select_activity_rows(conn, vacancy_id)
 
     assert vacancy
-    assert vacancy['status'] == Status.inactive
+    assert vacancy['status'] == VacancyStatus.inactive
     assert vacancy['params_hash'] is None
     assert len(activities) == 1
     assert activities[0]['date_ended']
@@ -200,7 +200,9 @@ async def test_reactivated_same_description_opens_activity_without_extract(
     db, parse_mock: ParseMock
 ) -> None:
     async with resources.engine.begin() as conn:
-        vacancy_id, page = await _prepare_parsed_vacancy(conn, status=Status.new)
+        vacancy_id, page = await _prepare_parsed_vacancy(
+            conn, status=VacancyStatus.pending
+        )
         ended_at = dt_now() - timedelta(days=1)
         await prepare_activity(
             conn, vacancy_id, date_started=ended_at, date_ended=ended_at
@@ -216,7 +218,7 @@ async def test_reactivated_same_description_opens_activity_without_extract(
         extract = await select_extract_row(conn, vacancy_id)
 
     assert vacancy
-    assert vacancy['status'] == Status.active
+    assert vacancy['status'] == VacancyStatus.active
     assert vacancy['params_hash'] == page.params_hash
     assert vacancy['description_hash'] == page.description_hash
     assert len(activities) == 2
@@ -230,7 +232,9 @@ async def test_reactivated_new_description_opens_activity_and_replaces_extract(
     db, parse_mock: ParseMock
 ) -> None:
     async with resources.engine.begin() as conn:
-        vacancy_id, page = await _prepare_parsed_vacancy(conn, status=Status.new)
+        vacancy_id, page = await _prepare_parsed_vacancy(
+            conn, status=VacancyStatus.pending
+        )
         ended_at = dt_now() - timedelta(days=1)
         await prepare_activity(
             conn, vacancy_id, date_started=ended_at, date_ended=ended_at
@@ -247,7 +251,7 @@ async def test_reactivated_new_description_opens_activity_and_replaces_extract(
         extract = await select_extract_row(conn, vacancy_id)
 
     assert vacancy
-    assert vacancy['status'] == Status.active
+    assert vacancy['status'] == VacancyStatus.active
     assert vacancy['params_hash'] == changed.params_hash
     assert vacancy['description_hash'] == changed.description_hash
     assert len(activities) == 2

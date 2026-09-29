@@ -10,17 +10,19 @@ from procrastinate.exceptions import AlreadyEnqueued
 from sqlalchemy.ext.asyncio.engine import AsyncConnection
 
 import src.db as db
-from src.enums import EnglishLevel, Source, Status
+from src.enums import EnglishLevel, ProfileStatus, Source, VacancyStatus
 from src.geo import canonicalize
 from src.seniority import seniority_from_title
 from src.shared.resources import resources
+from src.shared.utils import dt_now
 from src.types import (
-    DataDict,
     FullParsedPage,
     InactivePage,
     LexiconExpand,
     ParsedPage,
     ParseJob,
+    ProfileLLMExtract,
+    SkillExtract,
     VacancyLLMExtract,
 )
 
@@ -60,7 +62,7 @@ async def process_feed(category: str) -> None:
             {
                 'source': Source.djinni,
                 'external_id': external_id,
-                'status': Status.new,
+                'status': VacancyStatus.pending,
                 'category': cat,
                 'title': title,
                 'url': url,
@@ -76,7 +78,7 @@ async def process_feed(category: str) -> None:
     if ids:
         from src.tasks import enqueue_vacancies
 
-        await enqueue_vacancies.defer_async(status=Status.new)
+        await enqueue_vacancies.defer_async(status=VacancyStatus.pending)
 
 
 async def parse_vacancy_page(body: str) -> ParsedPage:
@@ -166,7 +168,7 @@ async def parse_vacancy_page(body: str) -> ParsedPage:
     seniority = seniority_from_title(title, years=exp_years)
 
     page = FullParsedPage(
-        status=Status.active,
+        status=VacancyStatus.active,
         company=ld_json['hiringOrganization']['name'],
         title=title,
         description=ld_json['description'],  # already not a html page
@@ -244,21 +246,20 @@ async def process_vacancy_page(job: ParseJob) -> None:
             ).defer_async(vacancy_id=vacancy_id)
 
 
-async def _add_vacancy_skill_and_lexicon(
-    conn: AsyncConnection, vacancy_id: str, data: VacancyLLMExtract
-) -> None:
-    for skill in data.skills:
+async def _sync_skills_into_lexicon[T: SkillExtract](
+    conn: AsyncConnection, skills: list[T]
+) -> list[T]:
+    for skill in skills:
         name = skill.canonical
         skill.canonical = name[:1].upper() + name[1:]
 
     missing_names = set(
         await db.select_new_skill_lexicon(
-            conn, data=[skill.canonical for skill in data.skills]
+            conn, data=[skill.canonical for skill in skills]
         )
     )
-    matched: dict[str, str] = {}
     if missing_names:
-        new_skills = [s for s in data.skills if s.canonical in missing_names]
+        new_skills = [s for s in skills if s.canonical in missing_names]
         rows = await db.select_skill_lexicon_matches(
             conn, data=[skill.normalized for skill in new_skills]
         )
@@ -273,24 +274,51 @@ async def _add_vacancy_skill_and_lexicon(
         if lexicon_data:
             await db.insert_skill_lexicon(conn, lexicon_data)
 
-    unique_skills: dict[str, DataDict] = {}
-    for skill in data.skills:
-        name = matched.get(skill.normalized) or skill.canonical
-        existing = unique_skills.get(name)
-        if existing is None:
-            unique_skills[name] = {
+        for skill in new_skills:
+            if name := matched.get(skill.normalized):
+                skill.canonical = name
+
+    uq_skills: dict[str, T] = {}
+    for skill in skills:
+        existing = uq_skills.get(skill.canonical)
+        uq_skills[skill.canonical] = existing.prefer(skill) if existing else skill
+    return list(uq_skills.values())
+
+
+async def _add_vacancy_skill_and_lexicon(
+    conn: AsyncConnection, vacancy_id: str, data: VacancyLLMExtract
+) -> None:
+    skills = await _sync_skills_into_lexicon(conn, data.skills)
+    await db.insert_vacancy_skills(
+        conn,
+        data=[
+            {
                 'vacancy_id': vacancy_id,
-                'skill_name': name,
+                'skill_name': skill.canonical,
                 'depth': skill.depth,
                 'importance': skill.importance,
             }
-            continue
-
-        existing['depth'] = max(existing['depth'], skill.depth)
-        existing['importance'] = max(existing['importance'], skill.importance)
-
-    await db.insert_vacancy_skills(conn, data=list(unique_skills.values()))
+            for skill in skills
+        ],
+    )
     await conn.commit()
+
+
+async def _add_profile_skill_and_lexicon(
+    conn: AsyncConnection, profile_id: str, data: ProfileLLMExtract
+) -> None:
+    skills = await _sync_skills_into_lexicon(conn, data.skills)
+    await db.insert_profile_skills(
+        conn,
+        data=[
+            {
+                'profile_id': profile_id,
+                'skill_name': skill.canonical,
+                'depth': skill.depth,
+            }
+            for skill in skills
+        ],
+    )
 
 
 async def process_vacancy_extract(vacancy_id: str) -> None:
@@ -305,13 +333,13 @@ async def process_vacancy_extract(vacancy_id: str) -> None:
             # if vacancy extract exists and skills are defined - skip
             if skill_count > 0:  # row['prompt_version'] == prompt_version
                 return
-            else:
-                raw_resp = await db.select_vacancy_extract_response(conn, vacancy_id)
-                data = VacancyLLMExtract.model_validate(json.loads(raw_resp))
 
+            raw_resp = await db.select_vacancy_extract_response(conn, vacancy_id)
+            data = VacancyLLMExtract.model_validate_json(raw_resp)
+            if data:
                 await _add_vacancy_skill_and_lexicon(conn, vacancy_id, data)
 
-                return
+            return
 
         row = await db.select_vacancy_for_extract(conn, vacancy_id)
 
@@ -448,3 +476,76 @@ async def process_lexicon_embedding() -> None:
         from src.tasks import lexicon_embed
 
         await lexicon_embed.defer_async()
+
+
+async def process_new_profile(profile_id: str) -> None:
+    prompt = resources.get_prompt('profile-extract')
+    prompt_version = f'{prompt.name} v{prompt.version}'
+
+    async with resources.engine.begin() as conn:
+        row = await db.select_profile_extract_info(conn, profile_id)
+        if not row:
+            print(f'No profile! profile_id {profile_id}')
+            return
+
+        if row['status'] != ProfileStatus.pending:
+            return
+
+        raw_resp = row['raw_response']
+        skill_count = row['skill_count']
+
+        if raw_resp:
+            if skill_count == 0:
+                data = ProfileLLMExtract.model_validate_json(raw_resp)
+                if data.skills:
+                    await _add_profile_skill_and_lexicon(conn, profile_id, data)
+
+            await db.update_profile(
+                conn, profile_id, data={'status': ProfileStatus.ready}
+            )
+            return
+
+    compiled_prompt = prompt.compile(
+        text=row['text'], current_date=dt_now().date().isoformat()
+    )
+
+    with propagate_attributes(prompt=prompt):
+        resp = await resources.llm.chat.completions.create(
+            name=prompt.name,
+            model=prompt.config['model'],
+            messages=compiled_prompt,
+            temperature=0,
+            response_format={'type': 'json_object'},
+            reasoning_effort='none',
+            metadata={'profile_id': profile_id},
+        )
+
+    raw_resp = resp.choices[0].message.content
+    if not raw_resp:
+        print('Profile extract. LLM response is empty!')
+        async with resources.engine.begin() as conn:
+            await db.update_profile(
+                conn, profile_id=profile_id, data={'status': ProfileStatus.failed}
+            )
+        return
+
+    data = ProfileLLMExtract.model_validate_json(raw_resp)
+    if not data.skills:
+        print('Profile extract. Skills list is empty!')
+
+    async with resources.engine.begin() as conn:
+        await db.update_profile(
+            conn,
+            profile_id=profile_id,
+            data={
+                'prompt_version': prompt_version,
+                'raw_response': raw_resp,
+                'job_families': data.job_families,
+                'experience': data.experience,
+                'english_level': data.eng_lvl,
+                'seniority': data.seniority,
+                'status': ProfileStatus.ready,
+            },
+        )
+        if data.skills:
+            await _add_profile_skill_and_lexicon(conn, profile_id, data)

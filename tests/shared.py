@@ -9,7 +9,7 @@ import sqlalchemy as sa
 import src.db as vacancy_db
 from sqlalchemy.engine.result import RowMapping
 from sqlalchemy.ext.asyncio.engine import AsyncConnection
-from src.enums import EnglishLevel, JobFamily, Seniority, SkillKind, Source, Status
+from src.enums import EnglishLevel, JobFamily, Seniority, SkillKind, Source, VacancyStatus
 from src.models import (
     SkillLexicon,
     VacanciesActivity,
@@ -28,7 +28,7 @@ def page_from_vacancy(vacancy: Mapping[str, Any]) -> FullParsedPage:
         company=vacancy['company'],
         title=vacancy['title'],
         description=vacancy['description'],
-        status=Status.active,
+        status=VacancyStatus.active,
         location_str=vacancy['location_str'],
         location=vacancy['location'],
         experience=vacancy['experience'],
@@ -70,7 +70,7 @@ async def prepare_vacancy(
     title: str = 'Backend',
     description: str = '',
     url: str = 'https://example.com/1',
-    status: Status = Status.new,
+    status: VacancyStatus = VacancyStatus.pending,
     params_hash: bytes | None = None,
     description_hash: bytes | None = None,
     location_str: str | None = None,

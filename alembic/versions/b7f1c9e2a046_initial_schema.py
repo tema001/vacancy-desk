@@ -51,7 +51,7 @@ def upgrade() -> None:
         sa.Column('english_level', SmallIntEnum(enum.EnglishLevel), nullable=True),
         sa.Column('seniority', SmallIntEnum(enum.Seniority), nullable=True),
         sa.Column('date_created', sa.DateTime(timezone=True), nullable=False),
-        sa.Column('status', SmallIntEnum(enum.Status), nullable=False),
+        sa.Column('status', SmallIntEnum(enum.VacancyStatus), nullable=False),
         sa.Column('date_last_seen', sa.DateTime(timezone=True), nullable=True),
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint(

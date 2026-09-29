@@ -7,6 +7,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     LargeBinary,
+    SmallInteger,
     Text,
     UniqueConstraint,
     Uuid,
@@ -19,11 +20,12 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from src.enums import (
     EnglishLevel,
     JobFamily,
+    ProfileStatus,
     Seniority,
     SkillDepth,
     SkillKind,
     Source,
-    Status,
+    VacancyStatus,
 )
 from src.shared.types import SmallIntEnum
 
@@ -68,7 +70,9 @@ class Vacancy(Base):
         DateTime(timezone=True), default=func.now()
     )
     # internal technical
-    status: Mapped[Status] = mapped_column(SmallIntEnum(Status), default=Status.active)
+    status: Mapped[VacancyStatus] = mapped_column(
+        SmallIntEnum(VacancyStatus), default=VacancyStatus.pending
+    )
     date_last_seen: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
@@ -153,3 +157,46 @@ class VacancySkill(Base):
     )
     depth: Mapped[SkillDepth] = mapped_column(SmallIntEnum(SkillDepth))
     importance: Mapped[float]
+
+
+class Profile(Base):
+    __tablename__ = 'profiles'
+
+    id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False),
+        primary_key=True,
+        server_default=text('uuidv7()'),
+    )
+
+    text: Mapped[str]
+    prompt_version: Mapped[str | None]
+    raw_response: Mapped[str | None]
+
+    job_families: Mapped[list[int] | None] = mapped_column(ARRAY(SmallInteger))
+    experience: Mapped[float | None]
+    english_level: Mapped[EnglishLevel | None] = mapped_column(SmallIntEnum(EnglishLevel))
+    seniority: Mapped[Seniority | None] = mapped_column(SmallIntEnum(Seniority))
+
+    status: Mapped[ProfileStatus] = mapped_column(
+        SmallIntEnum(ProfileStatus), default=ProfileStatus.pending
+    )
+    date_created: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=func.now()
+    )
+
+
+class ProfileSkill(Base):
+    __tablename__ = 'profile_skills'
+    __table_args__ = (UniqueConstraint('profile_id', 'skill_name'),)
+
+    id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False),
+        primary_key=True,
+        server_default=text('uuidv7()'),
+    )
+
+    profile_id: Mapped[str] = mapped_column(ForeignKey('profiles.id', ondelete='CASCADE'))
+    skill_name: Mapped[str] = mapped_column(
+        ForeignKey('skill_lexicon.skill_name', onupdate='CASCADE', ondelete='CASCADE')
+    )
+    depth: Mapped[SkillDepth] = mapped_column(SmallIntEnum(SkillDepth))

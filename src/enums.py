@@ -6,8 +6,8 @@ class Source(IntEnum):
     dou = 2
 
 
-class Status(IntEnum):
-    new = 1
+class VacancyStatus(IntEnum):
+    pending = 1
     active = 2
     inactive = 3
 
@@ -55,3 +55,9 @@ class SkillDepth(IntEnum):
 class SkillKind(IntEnum):
     hard = 1
     soft = 2
+
+
+class ProfileStatus(IntEnum):
+    pending = 1
+    ready = 2
+    failed = 3

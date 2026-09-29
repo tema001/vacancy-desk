@@ -1,6 +1,7 @@
 PROCESS_FEED = 'process_feed'
 PARSE_VACANCY = 'parse_vacancy'
 EXTRACT_VACANCY = 'extract_vacancy'
+EXTRACT_PROFILE = 'extract_profile'
 LEXICON_EXPAND = 'lexicon_expand'
 LEXICON_EMBED = 'lexicon_embed'
 ENQUEUE_VACANCIES = 'enqueue_vacancies'

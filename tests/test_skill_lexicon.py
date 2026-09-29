@@ -1,6 +1,6 @@
 from src.enums import JobFamily, SkillDepth, SkillKind
 from src.shared.resources import resources
-from src.types import ExtractedSkill, VacancyLLMExtract
+from src.types import VacancyLLMExtract, VacancySkillExtract
 from src.utils import _add_vacancy_skill_and_lexicon
 
 from tests.shared import (
@@ -12,8 +12,8 @@ from tests.shared import (
 )
 
 
-def _skill(canonical: str, *, importance: float = 1.0) -> ExtractedSkill:
-    return ExtractedSkill(
+def _skill(canonical: str, *, importance: float = 1.0) -> VacancySkillExtract:
+    return VacancySkillExtract(
         canonical=canonical,
         importance=importance,
         depth=SkillDepth.working,
