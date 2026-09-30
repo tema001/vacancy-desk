@@ -1,9 +1,10 @@
+import secrets
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import Body, FastAPI, HTTPException, Query, status
+from fastapi import FastAPI, HTTPException, Query, status
 from fastapi.staticfiles import StaticFiles
 from pydantic import AfterValidator
 
@@ -20,7 +21,7 @@ from src.jobs import (
 from src.services.worker import app as worker
 from src.shared.resources import resources
 from src.shared.types import uuid_schema
-from src.types import DataDict, ParamsSchema, ScoringParamsSchema
+from src.types import DataDict, ParamsSchema, ProfileCreateSchema, ScoringParamsSchema
 
 
 @asynccontextmanager
@@ -64,9 +65,9 @@ async def get_scored_vacancies(params: ScoringParamsSchema) -> DataDict:
 
 
 @app.post('/api/profiles', status_code=status.HTTP_202_ACCEPTED)
-async def create_new_profile(
-    text: Annotated[str, Body(min_length=10, max_length=5000, embed=True)],
-) -> DataDict:
+async def create_new_profile(body: ProfileCreateSchema) -> DataDict:
+    name = body.name or f'Noname-{secrets.token_hex(3)}'
+
     async with resources.engine.begin() as conn:
         pending_id = await db.select_pending_profile_id(conn)
         if pending_id:
@@ -75,7 +76,9 @@ async def create_new_profile(
                 detail={'profile_id': pending_id},
             )
 
-        profile_id = await db.insert_profile_text(conn, text)
+        profile_id = await db.insert_new_profile(
+            conn, data={'text': body.text, 'name': name}
+        )
 
     await worker.configure_task(
         EXTRACT_PROFILE,

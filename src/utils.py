@@ -1,6 +1,7 @@
 import json
 import re
 from contextlib import suppress
+from datetime import date
 
 import feedparser
 from httpx2 import HTTPStatusError
@@ -16,6 +17,7 @@ from src.seniority import seniority_from_title
 from src.shared.resources import resources
 from src.shared.utils import dt_now
 from src.types import (
+    ExperiencePeriod,
     FullParsedPage,
     InactivePage,
     LexiconExpand,
@@ -24,6 +26,7 @@ from src.types import (
     ProfileLLMExtract,
     SkillExtract,
     VacancyLLMExtract,
+    VacancySkillExtract,
 )
 
 CEFR_RE = re.compile(r'\b([ABC][12])\b', re.IGNORECASE)
@@ -286,9 +289,9 @@ async def _sync_skills_into_lexicon[T: SkillExtract](
 
 
 async def _add_vacancy_skill_and_lexicon(
-    conn: AsyncConnection, vacancy_id: str, data: VacancyLLMExtract
+    conn: AsyncConnection, vacancy_id: str, skills: list[VacancySkillExtract]
 ) -> None:
-    skills = await _sync_skills_into_lexicon(conn, data.skills)
+    skills_ = await _sync_skills_into_lexicon(conn, skills)
     await db.insert_vacancy_skills(
         conn,
         data=[
@@ -298,16 +301,15 @@ async def _add_vacancy_skill_and_lexicon(
                 'depth': skill.depth,
                 'importance': skill.importance,
             }
-            for skill in skills
+            for skill in skills_
         ],
     )
-    await conn.commit()
 
 
 async def _add_profile_skill_and_lexicon(
-    conn: AsyncConnection, profile_id: str, data: ProfileLLMExtract
+    conn: AsyncConnection, profile_id: str, skills: list[SkillExtract]
 ) -> None:
-    skills = await _sync_skills_into_lexicon(conn, data.skills)
+    skills_ = await _sync_skills_into_lexicon(conn, skills)
     await db.insert_profile_skills(
         conn,
         data=[
@@ -316,7 +318,7 @@ async def _add_profile_skill_and_lexicon(
                 'skill_name': skill.canonical,
                 'depth': skill.depth,
             }
-            for skill in skills
+            for skill in skills_
         ],
     )
 
@@ -336,8 +338,9 @@ async def process_vacancy_extract(vacancy_id: str) -> None:
 
             raw_resp = await db.select_vacancy_extract_response(conn, vacancy_id)
             data = VacancyLLMExtract.model_validate_json(raw_resp)
-            if data:
-                await _add_vacancy_skill_and_lexicon(conn, vacancy_id, data)
+            if data.skills:
+                await _add_vacancy_skill_and_lexicon(conn, vacancy_id, data.skills)
+            await conn.commit()
 
             return
 
@@ -387,7 +390,9 @@ async def process_vacancy_extract(vacancy_id: str) -> None:
         )
         await conn.commit()
 
-        await _add_vacancy_skill_and_lexicon(conn, vacancy_id, data)
+        if data.skills:
+            await _add_vacancy_skill_and_lexicon(conn, vacancy_id, data.skills)
+            await conn.commit()
 
 
 async def process_lexicon_expanding() -> None:
@@ -478,11 +483,49 @@ async def process_lexicon_embedding() -> None:
         await lexicon_embed.defer_async()
 
 
+def months_from_periods(periods: list[ExperiencePeriod]) -> float | None:
+    def _month(s: str) -> date:
+        return date.fromisoformat(f'{s}-01')
+
+    dates = []
+    today = dt_now().date()
+
+    for period in periods:
+        try:
+            start_date = _month(period.start)
+            end_date = _month(period.end) if period.end else today
+        except ValueError:
+            print('Profile extract. Invalid experience period!')
+            continue
+
+        if start_date <= end_date:
+            dates.append((start_date, end_date))
+
+    if not dates:
+        return None
+
+    dates.sort()
+    merged = [dates[0]]
+    for start_date, end_date in dates[1:]:
+        first, last = merged[-1]
+        if start_date <= last:
+            merged[-1] = (first, max(last, end_date))
+        else:
+            merged.append((start_date, end_date))
+
+    return float(
+        sum(
+            (end.year - start.year) * 12 + (end.month - start.month)
+            for start, end in merged
+        )
+    )
+
+
 async def process_new_profile(profile_id: str) -> None:
     prompt = resources.get_prompt('profile-extract')
     prompt_version = f'{prompt.name} v{prompt.version}'
 
-    async with resources.engine.begin() as conn:
+    async with resources.engine.connect() as conn:
         row = await db.select_profile_extract_info(conn, profile_id)
         if not row:
             print(f'No profile! profile_id {profile_id}')
@@ -498,16 +541,16 @@ async def process_new_profile(profile_id: str) -> None:
             if skill_count == 0:
                 data = ProfileLLMExtract.model_validate_json(raw_resp)
                 if data.skills:
-                    await _add_profile_skill_and_lexicon(conn, profile_id, data)
+                    await _add_profile_skill_and_lexicon(conn, profile_id, data.skills)
 
             await db.update_profile(
                 conn, profile_id, data={'status': ProfileStatus.ready}
             )
+            await conn.commit()
+
             return
 
-    compiled_prompt = prompt.compile(
-        text=row['text'], current_date=dt_now().date().isoformat()
-    )
+    compiled_prompt = prompt.compile(text=row['text'])
 
     with propagate_attributes(prompt=prompt):
         resp = await resources.llm.chat.completions.create(
@@ -533,19 +576,27 @@ async def process_new_profile(profile_id: str) -> None:
     if not data.skills:
         print('Profile extract. Skills list is empty!')
 
-    async with resources.engine.begin() as conn:
+    async with resources.engine.connect() as conn:
         await db.update_profile(
             conn,
-            profile_id=profile_id,
+            profile_id,
             data={
                 'prompt_version': prompt_version,
                 'raw_response': raw_resp,
                 'job_families': data.job_families,
-                'experience': data.experience,
+                'experience': (
+                    data.experience
+                    if data.experience is not None
+                    else months_from_periods(data.experience_periods)
+                ),
                 'english_level': data.eng_lvl,
                 'seniority': data.seniority,
-                'status': ProfileStatus.ready,
             },
         )
+        await conn.commit()
+
         if data.skills:
-            await _add_profile_skill_and_lexicon(conn, profile_id, data)
+            await _add_profile_skill_and_lexicon(conn, profile_id, data.skills)
+
+        await db.update_profile(conn, profile_id, data={'status': ProfileStatus.ready})
+        await conn.commit()
