@@ -51,6 +51,7 @@ async def get_profile(profile_id: str) -> DataDict | None:
 
     return {
         'id': row['id'],
+        'name': row['name'],
         'text': row['text'],
         'job_families': (
             [JobFamily(item).name for item in row['job_families']]

@@ -112,8 +112,10 @@ class Resources:
                 self.set_langfuse(Langfuse())
 
                 # warmup prompts
-                await asyncio.to_thread(self.get_prompt, name='vacancy-extract')
-                await asyncio.to_thread(self.get_prompt, name='lexicon-expand')
+                names = ('vacancy-extract', 'profile-extract', 'lexicon-expand')
+                async with asyncio.TaskGroup() as tg:
+                    for name in names:
+                        tg.create_task(asyncio.to_thread(self.get_prompt, name))
 
     async def stop(self) -> None:
         if self._client:

@@ -1,6 +1,6 @@
-from src.enums import JobFamily, SkillDepth, SkillKind
+from src.enums import SkillDepth, SkillKind
 from src.shared.resources import resources
-from src.types import VacancyLLMExtract, VacancySkillExtract
+from src.types import VacancySkillExtract
 from src.utils import _add_vacancy_skill_and_lexicon
 
 from tests.shared import (
@@ -21,11 +21,8 @@ def _skill(canonical: str, *, importance: float = 1.0) -> VacancySkillExtract:
     )
 
 
-def _extract(*canonicals: str) -> VacancyLLMExtract:
-    return VacancyLLMExtract(
-        job_family=JobFamily.backend,
-        skills=[_skill(name) for name in canonicals],
-    )
+def _skills(*canonicals: str) -> list[VacancySkillExtract]:
+    return [_skill(name) for name in canonicals]
 
 
 async def test_inserts_new_skill_into_lexicon_and_vacancy(db) -> None:
@@ -33,7 +30,7 @@ async def test_inserts_new_skill_into_lexicon_and_vacancy(db) -> None:
         vacancy_id = await prepare_vacancy(conn)
         await prepare_vacancy_extract(conn, vacancy_id)
 
-        await _add_vacancy_skill_and_lexicon(conn, vacancy_id, _extract('python'))
+        await _add_vacancy_skill_and_lexicon(conn, vacancy_id, _skills('python'))
 
         lexicon_rows = await select_lexicon_rows(conn)
         vacancy_rows = await select_vacancy_skill_rows(conn, vacancy_id)
@@ -57,7 +54,7 @@ async def test_reuses_existing_canonical_without_lexicon_insert(db) -> None:
         vacancy_id = await prepare_vacancy(conn)
         await prepare_vacancy_extract(conn, vacancy_id)
 
-        await _add_vacancy_skill_and_lexicon(conn, vacancy_id, _extract('python'))
+        await _add_vacancy_skill_and_lexicon(conn, vacancy_id, _skills('python'))
 
         lexicon_rows = await select_lexicon_rows(conn)
         vacancy_rows = await select_vacancy_skill_rows(conn, vacancy_id)
@@ -74,7 +71,7 @@ async def test_links_spelling_variant_to_existing_skill(db) -> None:
         await prepare_vacancy_extract(conn, vacancy_id)
 
         await _add_vacancy_skill_and_lexicon(
-            conn, vacancy_id, _extract('vector databases')
+            conn, vacancy_id, _skills('vector databases')
         )
 
         lexicon_rows = await select_lexicon_rows(conn)
@@ -86,12 +83,12 @@ async def test_links_spelling_variant_to_existing_skill(db) -> None:
 
 
 async def test_does_not_link_cpp_to_csharp_or_cpp17(db) -> None:
-    async with resources.engine.connect() as conn:
+    async with resources.engine.begin() as conn:
         await prepare_skill_lexicon(conn, 'C#')
         vacancy_id = await prepare_vacancy(conn)
         await prepare_vacancy_extract(conn, vacancy_id)
 
-        await _add_vacancy_skill_and_lexicon(conn, vacancy_id, _extract('C++'))
+        await _add_vacancy_skill_and_lexicon(conn, vacancy_id, _skills('C++'))
 
         lexicon_rows = await select_lexicon_rows(conn)
         vacancy_rows = await select_vacancy_skill_rows(conn, vacancy_id)
@@ -99,12 +96,12 @@ async def test_does_not_link_cpp_to_csharp_or_cpp17(db) -> None:
     assert [row['skill_name'] for row in lexicon_rows] == ['C#', 'C++']
     assert [row['skill_name'] for row in vacancy_rows] == ['C++']
 
-    async with resources.engine.connect() as conn:
+    async with resources.engine.begin() as conn:
         vacancy_id = await prepare_vacancy(
             conn, external_id='test-2', url='https://example.com/2'
         )
         await prepare_vacancy_extract(conn, vacancy_id)
-        await _add_vacancy_skill_and_lexicon(conn, vacancy_id, _extract('C++17'))
+        await _add_vacancy_skill_and_lexicon(conn, vacancy_id, _skills('C++17'))
 
         lexicon_rows = await select_lexicon_rows(conn)
         vacancy_rows = await select_vacancy_skill_rows(conn, vacancy_id)
@@ -120,7 +117,7 @@ async def test_does_not_link_opengl_to_opengles(db) -> None:
         vacancy_id = await prepare_vacancy(conn)
         await prepare_vacancy_extract(conn, vacancy_id)
 
-        await _add_vacancy_skill_and_lexicon(conn, vacancy_id, _extract('opengles'))
+        await _add_vacancy_skill_and_lexicon(conn, vacancy_id, _skills('opengles'))
 
         lexicon_rows = await select_lexicon_rows(conn)
         vacancy_rows = await select_vacancy_skill_rows(conn, vacancy_id)
@@ -141,7 +138,7 @@ async def test_mixes_existing_match_and_new_skills(db) -> None:
         await _add_vacancy_skill_and_lexicon(
             conn,
             vacancy_id,
-            _extract('Python', 'Vector databases', 'FastAPI'),
+            _skills('Python', 'Vector databases', 'FastAPI'),
         )
 
         lexicon_rows = await select_lexicon_rows(conn)
@@ -161,13 +158,10 @@ async def test_dedupes_skills_that_match_the_same_lexicon_name(db) -> None:
         await _add_vacancy_skill_and_lexicon(
             conn,
             vacancy_id,
-            data=VacancyLLMExtract(
-                job_family=JobFamily.backend,
-                skills=[
-                    _skill('Odoo', importance=0.45),
-                    _skill('Odoo ORM', importance=0.4),
-                ],
-            ),
+            skills=[
+                _skill('Odoo', importance=0.45),
+                _skill('Odoo ORM', importance=0.4),
+            ],
         )
 
         lexicon_rows = await select_lexicon_rows(conn)

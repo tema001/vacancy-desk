@@ -527,7 +527,7 @@ async def select_skill_lexicon_for_expand(conn: AsyncConnection, limit: int) -> 
             sa.select(SkillLexicon.skill_name)
             .where(SkillLexicon.expanded.is_(None))
             .limit(limit + 1)
-            .order_by(SkillLexicon.skill_name)
+            .order_by(SkillLexicon.date_created)
         ),
     )
     return [row['skill_name'] for row in rows]
@@ -607,6 +607,7 @@ async def select_profile(conn: AsyncConnection, profile_id: str) -> RowMapping |
         stmt=(
             sa.select(
                 Profile.id,
+                Profile.name,
                 Profile.text,
                 Profile.job_families,
                 Profile.experience,
@@ -646,12 +647,12 @@ async def select_pending_profile_id(conn: AsyncConnection) -> str | None:
     return row['id'] if row else None
 
 
-async def insert_profile_text(conn: AsyncConnection, text: str) -> str:
+async def insert_new_profile(conn: AsyncConnection, data: DataDict) -> str:
     row = await select_one(
         conn,
         stmt=(
             insert(Profile)
-            .values(text=text, status=ProfileStatus.pending)
+            .values({**data, 'status': ProfileStatus.pending})
             .returning(Profile.id)
         ),
     )

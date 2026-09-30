@@ -41,6 +41,11 @@ class ParamsSchema(BaseModel):
         return (self.page - 1) * self.limit
 
 
+class ProfileCreateSchema(BaseModel):
+    text: Annotated[str, StringConstraints(min_length=10, max_length=5000)]
+    name: Annotated[str, StringConstraints(min_length=5, max_length=100)] | None = None
+
+
 class CandidateSkill(BaseModel):
     skill_name: Annotated[str, StringConstraints(min_length=1, max_length=100)]
     depth: EnumField[SkillDepth]
@@ -80,11 +85,16 @@ class VacancyLLMExtract(BaseModel):
     skills: list[VacancySkillExtract]
 
 
+class ExperiencePeriod(BaseModel):
+    start: str  # YYYY-MM
+    end: str | None = None
+
+
 class ProfileLLMExtract(BaseModel):
     skills: list[SkillExtract]
-
-    job_families: list[EnumField[JobFamily]] | None = Field(default=None, max_length=10)
-    experience: float | None = None  # month
+    job_families: list[EnumField[JobFamily]] | None = Field(default=None, max_length=5)
+    experience: float | None = None
+    experience_periods: list[ExperiencePeriod] = Field(default_factory=list)
     eng_lvl: EnumField[EnglishLevel] | None = None
     seniority: EnumField[Seniority] | None = None
 

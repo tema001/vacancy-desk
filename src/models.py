@@ -168,6 +168,7 @@ class Profile(Base):
         server_default=text('uuidv7()'),
     )
 
+    name: Mapped[str]
     text: Mapped[str]
     prompt_version: Mapped[str | None]
     raw_response: Mapped[str | None]
