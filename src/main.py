@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import FastAPI, HTTPException, Query, status
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import AfterValidator
 
@@ -127,4 +128,16 @@ async def ai_lexicon_embed() -> DataDict:
 
 
 DIST = Path(__file__).parent / 'dist'
-app.mount('/', StaticFiles(directory=DIST, html=True), name='static')
+
+app.mount('/app/assets', StaticFiles(directory=DIST / 'assets'), name='static')
+
+
+@app.get('/app', include_in_schema=False)
+@app.get('/app/{path:path}', include_in_schema=False)
+async def frontend(path: str = '') -> FileResponse:
+    return FileResponse(DIST / 'index.html')
+
+
+@app.get('/', include_in_schema=False)
+async def redirect_to_app() -> RedirectResponse:
+    return RedirectResponse('/app')
