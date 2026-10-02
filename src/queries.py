@@ -38,19 +38,43 @@ async def get_scored_vacancies(params: ScoringParamsSchema) -> DataDict:
     }
 
 
+async def get_all_profiles() -> DataDict:
+    async with resources.engine.connect() as conn:
+        rows = await db.select_all_profiles(conn)
+
+    return {
+        'rows': [
+            {
+                'id': row['id'],
+                'name': row['name'],
+                'job_families': (
+                    [JobFamily(item).name for item in row['job_families']]
+                    if row['job_families']
+                    else None
+                ),
+                'status': row['status'].name,
+                'date_created': row['date_created'],
+            }
+            for row in rows
+        ]
+    }
+
+
 async def get_profile(profile_id: str) -> DataDict | None:
     async with resources.engine.connect() as conn:
-        row = await db.select_profile(conn, profile_id)
+        row = await db.select_profile_status(conn, profile_id)
         if not row:
             return None
 
         if row['status'] != ProfileStatus.ready:
             return {'id': profile_id, 'status': row['status'].name}
 
+        row = await db.select_profile(conn, profile_id)
         skills = await db.select_profile_skills(conn, profile_id)
+        assert row
 
     return {
-        'id': row['id'],
+        'id': profile_id,
         'name': row['name'],
         'text': row['text'],
         'job_families': (

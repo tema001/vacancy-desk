@@ -2,6 +2,7 @@ import type {
   ExtractedProfile,
   PendingProfile,
   ProfileCreateResult,
+  ProfileListResponse,
   ProfileResponse,
 } from './types'
 
@@ -29,6 +30,16 @@ async function sleep(ms: number, signal?: AbortSignal): Promise<void> {
       { once: true },
     )
   })
+}
+
+export async function fetchProfiles(): Promise<ProfileListResponse> {
+  const response = await fetch('/api/profiles')
+
+  if (!response.ok) {
+    throw new Error(`Could not load profiles (${response.status})`)
+  }
+
+  return (await response.json()) as ProfileListResponse
 }
 
 export async function createProfile(
@@ -61,6 +72,16 @@ export async function createProfile(
   }
 
   return (await response.json()) as ProfileCreateResult
+}
+
+export async function deleteProfile(profileId: string): Promise<void> {
+  const response = await fetch(`/api/profiles/${profileId}`, {
+    method: 'DELETE',
+  })
+
+  if (!response.ok) {
+    throw new Error(`Could not delete profile (${response.status})`)
+  }
 }
 
 export async function fetchProfile(
