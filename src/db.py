@@ -601,12 +601,19 @@ async def insert_vacancy_skills(
     await conn.execute(insert(VacancySkill).values(data))
 
 
+async def select_profile_status(
+    conn: AsyncConnection, profile_id: str
+) -> RowMapping | None:
+    return await select_one(
+        conn, stmt=(sa.select(Profile.status).where(Profile.id == profile_id))
+    )
+
+
 async def select_profile(conn: AsyncConnection, profile_id: str) -> RowMapping | None:
     return await select_one(
         conn,
         stmt=(
             sa.select(
-                Profile.id,
                 Profile.name,
                 Profile.text,
                 Profile.job_families,
@@ -615,6 +622,21 @@ async def select_profile(conn: AsyncConnection, profile_id: str) -> RowMapping |
                 Profile.seniority,
                 Profile.status,
             ).where(Profile.id == profile_id)
+        ),
+    )
+
+
+async def select_all_profiles(conn: AsyncConnection) -> Sequence[RowMapping]:
+    return await select_all(
+        conn,
+        stmt=(
+            sa.select(
+                Profile.id,
+                Profile.name,
+                Profile.job_families,
+                Profile.status,
+                Profile.date_created,
+            ).order_by(Profile.date_created.desc())
         ),
     )
 
@@ -663,6 +685,10 @@ async def insert_new_profile(conn: AsyncConnection, data: DataDict) -> str:
 async def update_profile(conn: AsyncConnection, profile_id: str, data: DataDict) -> None:
     stmt = sa.update(Profile).values(data).where(Profile.id == profile_id)
     await conn.execute(stmt)
+
+
+async def delete_profile(conn: AsyncConnection, profile_id: str) -> None:
+    await conn.execute(sa.delete(Profile).where(Profile.id == profile_id))
 
 
 async def insert_profile_skills(

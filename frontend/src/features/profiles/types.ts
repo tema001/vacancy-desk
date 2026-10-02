@@ -3,9 +3,13 @@ export type ProfileStatus = 'pending' | 'ready' | 'failed'
 export interface Profile {
   id: string
   name: string
-  directions: string[]
-  createdAt: string
+  job_families: string[] | null
   status: ProfileStatus
+  date_created: string
+}
+
+export interface ProfileListResponse {
+  rows: Profile[]
 }
 
 export type EnglishLevel = 1 | 2 | 3 | 4 | 5 | 6

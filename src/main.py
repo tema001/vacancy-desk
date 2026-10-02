@@ -5,12 +5,13 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import FastAPI, HTTPException, Query, status
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import AfterValidator
 
 import src.db as db
 import src.queries as queries
+from src.enums import ProfileStatus
 from src.jobs import (
     ENQUEUE_VACANCIES,
     EXTRACT_PROFILE,
@@ -90,6 +91,11 @@ async def create_new_profile(body: ProfileCreateSchema) -> DataDict:
     return {'id': profile_id}
 
 
+@app.get('/api/profiles')
+async def get_all_profiles() -> DataDict:
+    return await queries.get_all_profiles()
+
+
 @app.get('/api/profiles/{profile_id}')
 async def get_profile(
     profile_id: Annotated[str, AfterValidator(uuid_schema)],
@@ -99,6 +105,24 @@ async def get_profile(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
     return profile
+
+
+@app.delete('/api/profiles/{profile_id}')
+async def delete_profile(
+    profile_id: Annotated[str, AfterValidator(uuid_schema)],
+) -> Response:
+    async with resources.engine.begin() as conn:
+        row = await db.select_profile_status(conn, profile_id)
+        if row:
+            if row['status'] == ProfileStatus.pending:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail={'profile_id': profile_id},
+                )
+
+            await db.delete_profile(conn, profile_id)
+
+    return Response(status_code=status.HTTP_200_OK)
 
 
 @app.get('/api/ai/extract')
