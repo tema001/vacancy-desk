@@ -69,9 +69,10 @@ async def get_profile(profile_id: str) -> DataDict | None:
         if row['status'] != ProfileStatus.ready:
             return {'id': profile_id, 'status': row['status'].name}
 
-        row = await db.select_profile(conn, profile_id)
         skills = await db.select_profile_skills(conn, profile_id)
-        assert row
+        row = await db.select_profile(conn, profile_id)
+        if not row:
+            return None
 
     return {
         'id': profile_id,
