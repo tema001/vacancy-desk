@@ -177,6 +177,7 @@ class Profile(Base):
     experience: Mapped[float | None]
     english_level: Mapped[EnglishLevel | None] = mapped_column(SmallIntEnum(EnglishLevel))
     seniority: Mapped[Seniority | None] = mapped_column(SmallIntEnum(Seniority))
+    is_selected: Mapped[bool] = mapped_column(default=False)
 
     status: Mapped[ProfileStatus] = mapped_column(
         SmallIntEnum(ProfileStatus), default=ProfileStatus.pending

@@ -3,6 +3,7 @@ import type { ExtractedProfile } from './types'
 
 interface ProfileDetailsModalProps {
   name: string
+  isSelected: boolean
   profile: ExtractedProfile | null
   errorMessage: string | null
   onClose: () => void
@@ -16,6 +17,7 @@ function showDialog(dialog: HTMLDialogElement | null): void {
 
 export function ProfileDetailsModal({
   name,
+  isSelected,
   profile,
   errorMessage,
   onClose,
@@ -28,7 +30,16 @@ export function ProfileDetailsModal({
       onCancel={onClose}
     >
       <div className="profile-modal-heading">
-        <h2 id="profile-modal-title">{profile?.name ?? name}</h2>
+        <div className="profile-modal-title">
+          <h2 id="profile-modal-title">{profile?.name ?? name}</h2>
+          {isSelected ? (
+            <span className="profile-modal-selected" aria-label="Selected">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 2.8 14.07 9.16 20.75 9.16 15.34 13.06 17.41 19.43 12 15.51 6.59 19.43 8.66 13.06 3.25 9.16 9.93 9.16Z" />
+              </svg>
+            </span>
+          ) : null}
+        </div>
         <button
           type="button"
           className="profile-modal-close"

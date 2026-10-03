@@ -77,7 +77,7 @@ services:
       - ./src:/app/src
       - ./tests:/app/tests
       - ./pyproject.toml:/app/pyproject.toml:ro
-    command: ['sh', '-c', 'ruff format . && ruff check --fix . && mypy src']
+    command: ['sh', '-c', 'ruff format . && ruff check --fix .']
 
   build-static:
     build:

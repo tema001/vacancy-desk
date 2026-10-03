@@ -16,7 +16,7 @@
   min-width: 0;
   min-height: 160px;
   flex-direction: column;
-  padding: 18px;
+  padding: 8px 18px 18px;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--surface);
@@ -26,40 +26,40 @@
   position: relative;
 }
 
-.profile-card-wrap.is-confirming {
+.profile-card-wrap.is-open {
   z-index: 5;
 }
 
-.profile-card-delete {
+.profile-card-menu {
   position: absolute;
-  top: -10px;
-  left: -10px;
+  top: 8px;
+  right: 8px;
   z-index: 2;
+}
+
+.profile-card-menu-trigger {
   display: grid;
   width: 28px;
   height: 28px;
   place-items: center;
-  border: 1px solid #70423f;
-  border-radius: 8px;
-  color: #d2928d;
-  background: #291d1c;
-  opacity: 0;
-  pointer-events: none;
-  cursor: pointer;
+  border-radius: 7px;
+  color: var(--text-muted);
+  background: transparent;
 }
 
-.profile-card-wrap:hover .profile-card-delete,
-.profile-card-wrap.is-confirming .profile-card-delete,
-.profile-card-delete:focus-visible {
-  opacity: 1;
-  pointer-events: auto;
+.profile-card-menu-trigger:hover,
+.profile-card-menu-trigger[aria-expanded='true'] {
+  color: var(--text);
+  background: var(--surface-hover);
 }
 
-.profile-card-delete:hover {
-  background: #3a2423;
+.profile-card-menu-trigger svg {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
 }
 
-.profile-card-confirm-backdrop {
+.profile-card-overlay {
   position: fixed;
   inset: 0;
   z-index: 3;
@@ -68,10 +68,51 @@
   cursor: default;
 }
 
+.profile-card-menu-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 4;
+  display: flex;
+  min-width: 138px;
+  flex-direction: column;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-raised);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 40%);
+}
+
+.profile-card-menu-item {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 8px;
+  padding: 0 9px;
+  color: var(--text);
+  background: transparent;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.profile-card-menu-item:hover {
+  background: var(--surface-hover);
+}
+
+.profile-card-menu-item svg {
+  width: 18px;
+  height: 18px;
+  fill: #d4b66f;
+}
+
+.profile-card-menu-item.is-danger {
+  color: #d2928d;
+}
+
 .profile-card-confirm {
   position: absolute;
-  top: -12px;
-  left: 24px;
+  top: 8px;
+  right: 40px;
   z-index: 4;
   display: flex;
   align-items: center;
@@ -115,16 +156,6 @@
   background: var(--surface-hover);
 }
 
-.profile-card-delete svg {
-  width: 14px;
-  height: 14px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
 .profile-card-clickable {
   cursor: pointer;
 }
@@ -141,13 +172,23 @@
 
 .profile-card-heading {
   display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  justify-content: space-between;
+  min-height: 28px;
+  align-items: center;
+  padding-right: 28px;
 }
 
 .profile-card-heading h2 {
   overflow-wrap: anywhere;
+  line-height: 28px;
+}
+
+.profile-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: auto 0 0;
+  padding-top: 24px;
 }
 
 .profile-status {
@@ -191,10 +232,19 @@
 }
 
 .profile-card-meta {
-  margin: auto 0 0;
-  padding-top: 24px;
   color: var(--text);
   font-size: 0.76rem;
+}
+
+.profile-selected {
+  display: grid;
+  color: #d4b66f;
+}
+
+.profile-selected svg {
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
 }
 
 .profile-modal {
@@ -223,8 +273,31 @@
   border-bottom: 1px solid var(--border);
 }
 
+.profile-modal-title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
 .profile-modal-heading h2 {
+  overflow-wrap: anywhere;
   font-size: 1.2rem;
+}
+
+.profile-modal-selected {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  place-items: center;
+  color: #d4b66f;
+}
+
+.profile-modal-selected svg {
+  width: 22px;
+  height: 22px;
+  fill: currentColor;
 }
 
 .profile-modal-heading p {
@@ -345,7 +418,6 @@
 
 .profile-extract {
   display: flex;
-  max-height: calc(100vh - 160px);
   flex-direction: column;
   gap: 22px;
   padding: 22px 24px 24px;
@@ -368,25 +440,29 @@
 .profile-extract-fields > div:not(.profile-extract-row),
 .profile-extract-row > div {
   display: flex;
-  min-width: 0;
   flex-direction: column;
   gap: 6px;
 }
 
 .profile-extract-fields dt {
   color: var(--text-muted);
-  font-size: 0.91rem;
+  font-size: 0.9rem;
   font-weight: 650;
 }
 
 .profile-extract-fields dd {
   margin: 0;
   color: var(--text);
-  font-size: 1.03rem;
+  font-size: 0.9rem;
 }
 
 .profile-extract-empty {
   color: var(--text-muted);
+}
+
+.profile-experience {
+  display: flex;
+  flex-direction: column;
 }
 
 .profile-extract-spoiler summary {

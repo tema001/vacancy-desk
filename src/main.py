@@ -23,7 +23,13 @@ from src.jobs import (
 from src.services.worker import app as worker
 from src.shared.resources import resources
 from src.shared.types import uuid_schema
-from src.types import DataDict, ParamsSchema, ProfileCreateSchema, ScoringParamsSchema
+from src.types import (
+    DataDict,
+    ParamsSchema,
+    ProfileCreateSchema,
+    ProfileUpdateSchema,
+    ScoringParamsSchema,
+)
 
 
 @asynccontextmanager
@@ -107,20 +113,43 @@ async def get_profile(
     return profile
 
 
+@app.patch('/api/profiles/{profile_id}')
+async def update_profile(
+    profile_id: Annotated[str, AfterValidator(uuid_schema)],
+    body: ProfileUpdateSchema,
+) -> Response:
+    async with resources.engine.begin() as conn:
+        row = await db.select_profile_status(conn, profile_id)
+        if not row:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
+
+        if row['status'] != ProfileStatus.ready:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={'profile_id': profile_id},
+            )
+
+        await db.update_profile(conn, profile_id, data={'is_selected': body.is_selected})
+
+    return Response(status_code=status.HTTP_200_OK)
+
+
 @app.delete('/api/profiles/{profile_id}')
 async def delete_profile(
     profile_id: Annotated[str, AfterValidator(uuid_schema)],
 ) -> Response:
     async with resources.engine.begin() as conn:
         row = await db.select_profile_status(conn, profile_id)
-        if row:
-            if row['status'] == ProfileStatus.pending:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail={'profile_id': profile_id},
-                )
+        if not row:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
-            await db.delete_profile(conn, profile_id)
+        if row['status'] == ProfileStatus.pending:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={'profile_id': profile_id},
+            )
+
+        await db.delete_profile(conn, profile_id)
 
     return Response(status_code=status.HTTP_200_OK)
 

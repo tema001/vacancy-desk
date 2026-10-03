@@ -42,12 +42,15 @@ export function formatSeniority(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1)
 }
 
-export function formatExperience(months: number): string {
+export function formatExperience(months: number): { years: string; months: string } {
   const years = Math.floor(months / 12)
   const yearLabel = years === 1 ? 'year' : 'years'
   const monthLabel = months === 1 ? 'month' : 'months'
 
-  return `${years} ${yearLabel} (${months} ${monthLabel})`
+  return {
+    years: `${years} ${yearLabel}`,
+    months: `(${months} ${monthLabel})`,
+  }
 }
 
 export function formatEnglishLevel(level: number): string {
