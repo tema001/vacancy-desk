@@ -621,6 +621,7 @@ async def select_profile(conn: AsyncConnection, profile_id: str) -> RowMapping |
                 Profile.english_level,
                 Profile.seniority,
                 Profile.status,
+                Profile.is_selected,
             ).where(Profile.id == profile_id)
         ),
     )
@@ -636,6 +637,7 @@ async def select_all_profiles(conn: AsyncConnection) -> Sequence[RowMapping]:
                 Profile.job_families,
                 Profile.status,
                 Profile.date_created,
+                Profile.is_selected,
             ).order_by(Profile.date_created.desc())
         ),
     )
@@ -671,12 +673,7 @@ async def select_pending_profile_id(conn: AsyncConnection) -> str | None:
 
 async def insert_new_profile(conn: AsyncConnection, data: DataDict) -> str:
     row = await select_one(
-        conn,
-        stmt=(
-            insert(Profile)
-            .values({**data, 'status': ProfileStatus.pending})
-            .returning(Profile.id)
-        ),
+        conn, stmt=(insert(Profile).values(data).returning(Profile.id))
     )
     assert row
     return row['id']

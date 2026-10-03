@@ -5,6 +5,7 @@ export interface Profile {
   name: string
   job_families: string[] | null
   status: ProfileStatus
+  is_selected: boolean
   date_created: string
 }
 
@@ -38,6 +39,7 @@ export interface ExtractedProfile {
   english_level: EnglishLevel | null
   seniority: string | null
   status: 'ready'
+  is_selected: boolean
   skills: ProfileSkill[]
 }
 

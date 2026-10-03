@@ -53,6 +53,7 @@ async def get_all_profiles() -> DataDict:
                     else None
                 ),
                 'status': row['status'].name,
+                'is_selected': row['is_selected'],
                 'date_created': row['date_created'],
             }
             for row in rows
@@ -87,6 +88,7 @@ async def get_profile(profile_id: str) -> DataDict | None:
         'english_level': row['english_level'],
         'seniority': row['seniority'].name if row['seniority'] else None,
         'status': row['status'].name,
+        'is_selected': row['is_selected'],
         'skills': [
             {
                 'skill_name': skill['skill_name'],

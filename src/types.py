@@ -46,6 +46,10 @@ class ProfileCreateSchema(BaseModel):
     name: Annotated[str, StringConstraints(min_length=5, max_length=100)] | None = None
 
 
+class ProfileUpdateSchema(BaseModel):
+    is_selected: bool
+
+
 class CandidateSkill(BaseModel):
     skill_name: Annotated[str, StringConstraints(min_length=1, max_length=100)]
     depth: EnumField[SkillDepth]

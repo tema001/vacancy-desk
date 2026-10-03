@@ -84,6 +84,23 @@ export async function deleteProfile(profileId: string): Promise<void> {
   }
 }
 
+export async function setProfileSelected(
+  profileId: string,
+  isSelected: boolean,
+): Promise<void> {
+  const response = await fetch(`/api/profiles/${profileId}`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ is_selected: isSelected }),
+  })
+
+  if (!response.ok) {
+    throw new Error(`Could not update profile (${response.status})`)
+  }
+}
+
 export async function fetchProfile(
   profileId: string,
   signal?: AbortSignal,

@@ -17,6 +17,8 @@ const EMPTY = 'empty'
 export function ProfileExtractDetails({ profile }: ProfileExtractDetailsProps) {
   const jobFamilies = profile.job_families ?? []
   const skillSegments = groupSkillsByDepth(profile.skills)
+  const experience =
+    profile.experience == null ? null : formatExperience(profile.experience)
 
   return (
     <dl className="profile-extract-fields">
@@ -52,10 +54,13 @@ export function ProfileExtractDetails({ profile }: ProfileExtractDetailsProps) {
         <div>
           <dt>Experience</dt>
           <dd>
-            {profile.experience == null ? (
+            {experience == null ? (
               <span className="profile-extract-empty">{EMPTY}</span>
             ) : (
-              formatExperience(profile.experience)
+              <span className="profile-experience">
+                <span>{experience.years}</span>
+                <span>{experience.months}</span>
+              </span>
             )}
           </dd>
         </div>

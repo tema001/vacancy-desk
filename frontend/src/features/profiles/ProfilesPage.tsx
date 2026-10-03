@@ -1,6 +1,13 @@
 import { useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { fetchProfile, fetchProfiles, deleteProfile, isAbortError, isExtractedProfile } from './api'
+import {
+  fetchProfile,
+  fetchProfiles,
+  deleteProfile,
+  setProfileSelected,
+  isAbortError,
+  isExtractedProfile,
+} from './api'
 import { ProfileCard } from './ProfileCard'
 import { ProfileDetailsModal } from './ProfileDetailsModal'
 import { ProfileFormModal } from './ProfileFormModal'
@@ -10,6 +17,7 @@ import './profiles.css'
 interface ProfileDetailsView {
   id: string
   name: string
+  isSelected: boolean
   profile: ExtractedProfile | null
   errorMessage: string | null
 }
@@ -37,7 +45,13 @@ export function ProfilesPage() {
     detailsAbortRef.current?.abort()
     const controller = new AbortController()
     detailsAbortRef.current = controller
-    setDetails({ id: profile.id, name: profile.name, profile: null, errorMessage: null })
+    setDetails({
+      id: profile.id,
+      name: profile.name,
+      isSelected: profile.is_selected,
+      profile: null,
+      errorMessage: null,
+    })
 
     try {
       const data = await fetchProfile(profile.id, controller.signal)
@@ -45,13 +59,20 @@ export function ProfilesPage() {
         setDetails({
           id: profile.id,
           name: profile.name,
+          isSelected: profile.is_selected,
           profile: null,
           errorMessage: 'Profile is not ready',
         })
         return
       }
 
-      setDetails({ id: data.id, name: data.name, profile: data, errorMessage: null })
+      setDetails({
+        id: data.id,
+        name: data.name,
+        isSelected: data.is_selected,
+        profile: data,
+        errorMessage: null,
+      })
     } catch (error) {
       if (isAbortError(error) || controller.signal.aborted) {
         return
@@ -60,6 +81,7 @@ export function ProfilesPage() {
       setDetails({
         id: profile.id,
         name: profile.name,
+        isSelected: profile.is_selected,
         profile: null,
         errorMessage:
           error instanceof Error ? error.message : 'Could not load profile',
@@ -78,6 +100,15 @@ export function ProfilesPage() {
       closeDetails()
     }
 
+    await profilesQuery.refetch()
+  }
+
+  async function handleSetSelected(profile: Profile, isSelected: boolean): Promise<void> {
+    if (profile.status !== 'ready') {
+      return
+    }
+
+    await setProfileSelected(profile.id, isSelected)
     await profilesQuery.refetch()
   }
 
@@ -147,7 +178,7 @@ export function ProfilesPage() {
               <ProfileCard
                 profile={profile}
                 key={profile.id}
-                onSelect={
+                onOpen={
                   profile.status === 'ready'
                     ? () => void openProfile(profile)
                     : undefined
@@ -155,6 +186,11 @@ export function ProfilesPage() {
                 onDelete={
                   profile.status !== 'pending'
                     ? () => void handleDelete(profile)
+                    : undefined
+                }
+                onSetSelected={
+                  profile.status === 'ready'
+                    ? (isSelected) => void handleSetSelected(profile, isSelected)
                     : undefined
                 }
               />
@@ -172,6 +208,7 @@ export function ProfilesPage() {
         {details ? (
           <ProfileDetailsModal
             name={details.name}
+            isSelected={details.isSelected}
             profile={details.profile}
             errorMessage={details.errorMessage}
             onClose={closeDetails}
