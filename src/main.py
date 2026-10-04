@@ -28,7 +28,6 @@ from src.types import (
     ParamsSchema,
     ProfileCreateSchema,
     ProfileUpdateSchema,
-    ScoringParamsSchema,
 )
 
 
@@ -68,8 +67,15 @@ async def get_vacancies(params: ParamsSchema) -> DataDict:
 
 
 @app.post('/api/vacancies/score')
-async def get_scored_vacancies(params: ScoringParamsSchema) -> DataDict:
-    return await queries.get_scored_vacancies(params)
+async def get_scored_vacancies() -> DataDict:
+    result = await queries.get_scored_vacancies()
+    if not result:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail='No selected profile found'
+        )
+
+    return result
 
 
 @app.post('/api/profiles', status_code=status.HTTP_202_ACCEPTED)

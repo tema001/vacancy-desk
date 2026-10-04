@@ -3,7 +3,7 @@ import type { ProfileSkill, SkillDepth } from './types'
 const jobFamilyLabels: Record<string, string> = {
   backend: 'Backend',
   frontend: 'Frontend',
-  mobile: 'Mobile',
+  fullstack: 'Fullstack',
   data: 'Data',
   qa: 'QA',
   devops: 'DevOps',
@@ -13,6 +13,8 @@ const jobFamilyLabels: Record<string, string> = {
   delivery: 'Delivery',
   design: 'Design',
   support: 'Support',
+  ai_ml: 'AI/ML',
+  mobile: 'Mobile',
   other: 'Other',
 }
 
