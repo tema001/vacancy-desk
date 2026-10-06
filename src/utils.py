@@ -409,10 +409,9 @@ async def process_lexicon_expanding() -> None:
     with propagate_attributes(prompt=prompt):
         resp = await resources.llm.chat.completions.create(
             name=prompt.name,
-            # model=prompt.config['model'],
-            model='gpt-6-luna',
             messages=compiled_prompt,
-            # temperature=0,
+            model=prompt.config['model'],
+            temperature=prompt.config['temperature'],
             response_format={'type': 'json_object'},
             reasoning_effort='low',
         )
@@ -439,8 +438,8 @@ async def process_lexicon_expanding() -> None:
     if len(rows) > limit:
         await lexicon_expand.defer_async()
 
-        # with suppress(AlreadyEnqueued):
-        #     await lexicon_embed.configure(schedule_in={'minutes': 1}).defer_async()
+        with suppress(AlreadyEnqueued):
+            await lexicon_embed.configure(schedule_in={'minutes': 2}).defer_async()
     else:
         with suppress(AlreadyEnqueued):
             await lexicon_embed.defer_async()
