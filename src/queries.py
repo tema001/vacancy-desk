@@ -27,23 +27,27 @@ async def get_scored_vacancies() -> DataDict | None:
         profile = ScoringProfile.from_db(profile_raw)
         rows = await db.select_vacancy_skill_matches(
             conn,
-            profile,
+            profile=profile,
             similarity_threshold=SIMILARITY_THRESHOLD,
         )
+        p25 = await db.select_total_importance_perc(
+            conn, percentile=0.25, profile=profile
+        )
 
-    print(len(rows))
-    print([row for row in rows if row['similarity'] >= 0.4])
-    scored_rows = score_vacancy_matches(rows)
-    print(len(scored_rows))
+        scored_rows = score_vacancy_matches(rows, p25)[:30]
+        vacancies = await db.select_vacancies_by_ids(
+            conn, ids=[r['id'] for r in scored_rows]
+        )
+
+    vacancies_map = {v['id']: v for v in vacancies}
+    final_rows = [
+        {**vacancies_map[row['id']], 'score': row['score']} for row in scored_rows
+    ]
 
     return {
-        'profile': {
-            'name': profile.name,
-            'job_families': [JobFamily(item).name for item in profile.job_families]
-                    if profile.job_families
-                    else None
-        },
-        'rows': scored_rows[:30],
+        'total_count': len(scored_rows),
+        'profile': profile.to_api(),
+        'rows': final_rows,
     }
 
 

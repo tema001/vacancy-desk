@@ -224,3 +224,13 @@ class ScoringProfile:
             experience=row['experience'],
             seniority=row['seniority'],
         )
+
+    def to_api(self) -> DataDict:
+        return {
+            'name': self.name,
+            'job_families': (
+                [JobFamily(item).name for item in self.job_families]
+                if self.job_families
+                else None
+            ),
+        }

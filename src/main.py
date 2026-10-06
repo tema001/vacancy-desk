@@ -72,7 +72,7 @@ async def get_scored_vacancies() -> DataDict:
     if not result:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail='No selected profile found'
+            detail='No selected profile found',
         )
 
     return result

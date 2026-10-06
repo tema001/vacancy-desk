@@ -59,6 +59,8 @@ class SkillKind(IntEnum):
     hard = 1
     soft = 2
 
+    dev_test = 100
+
 
 class ProfileStatus(IntEnum):
     pending = 1

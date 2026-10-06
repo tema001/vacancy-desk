@@ -20,6 +20,23 @@ main {
   margin-bottom: 15px;
 }
 
+.page-title {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+}
+
+.page-title-link {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.page-title-link:hover {
+  color: var(--text);
+}
+
 h1 {
   margin: 0;
   color: var(--text);
@@ -89,6 +106,17 @@ a:focus-visible {
 .secondary-button:disabled {
   color: var(--text-muted);
   background: var(--surface);
+}
+
+.secondary-button.is-active {
+  border-color: var(--accent);
+  color: #ffffff;
+  background: var(--accent);
+}
+
+.secondary-button.is-active:hover:not(:disabled) {
+  border-color: var(--accent-hover);
+  background: var(--accent-hover);
 }
 
 .page-actions {
@@ -313,9 +341,14 @@ a:focus-visible {
   background: transparent;
 }
 
-.text-button:hover {
+.text-button:hover:not(:disabled) {
   color: var(--text);
   background: var(--surface-hover);
+}
+
+.text-button:disabled {
+  color: var(--text-muted);
+  opacity: 0.45;
 }
 
 .results-panel {
@@ -649,7 +682,8 @@ tbody tr:last-child td {
   white-space: nowrap;
 }
 
-.salary {
+.salary,
+.score {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }

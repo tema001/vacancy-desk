@@ -271,6 +271,11 @@ async def select_vacancy_skill_matches(
 
     _from = Vacancy.__table__
     filters = [Vacancy.status == VacancyStatus.active]
+
+    if profile.job_families:
+        filters.append(VacancyExtract.job_family.in_(profile.job_families))
+        _from = _from.join(VacancyExtract, VacancyExtract.vacancy_id == Vacancy.id)
+
     if profile.experience:
         filters.append(
             sa.or_(
@@ -285,9 +290,6 @@ async def select_vacancy_skill_matches(
                 Vacancy.english_level <= profile.english_level,
             )
         )
-    if profile.job_families:
-        filters.append(VacancyExtract.job_family.in_(profile.job_families))
-        _from = _from.join(VacancyExtract, VacancyExtract.vacancy_id == Vacancy.id)
 
     filtered_vacancies = (
         sa.select(Vacancy.id).select_from(_from).where(*filters).cte('filtered_vacancies')
@@ -319,8 +321,15 @@ async def select_vacancy_skill_matches(
             SkillLexicon.expanded_vector,
         )
         .select_from(ProfileSkill)
-        .join(SkillLexicon, sa.and_(ProfileSkill.profile_id == profile.id, SkillLexicon.skill_name == ProfileSkill.skill_name))
+        .join(
+            SkillLexicon,
+            sa.and_(
+                ProfileSkill.profile_id == profile.id,
+                SkillLexicon.skill_name == ProfileSkill.skill_name,
+            ),
+        )
         .cte('user_vectors')
+        .prefix_with('MATERIALIZED')
     )
 
     similarity = sa.case(
@@ -371,32 +380,69 @@ async def select_vacancy_skill_matches(
 
     stmt = (
         sa.select(
-            Vacancy.id,
-            Vacancy.source,
-            Vacancy.category,
-            Vacancy.company,
-            Vacancy.title,
-            Vacancy.url,
-            Vacancy.location_str,
-            Vacancy.salary_min,
-            Vacancy.salary_max,
-            Vacancy.salary_level,
-            Vacancy.experience,
-            Vacancy.status,
+            VacancySkill.vacancy_id.label('id'),
             VacancySkill.depth.label('required_depth'),
             VacancySkill.importance,
             skill_totals.c.total_importance,
-            skill_matches.c.skill_name,
-            skill_matches.c.user_skill_name,
+            # skill_matches.c.skill_name,
+            # skill_matches.c.user_skill_name,
             skill_matches.c.user_depth,
             skill_matches.c.similarity,
         )
         .select_from(filtered_vacancies)
-        .join(Vacancy, Vacancy.id == filtered_vacancies.c.id)
-        .join(VacancySkill, VacancySkill.vacancy_id == Vacancy.id)
+        .join(VacancySkill, VacancySkill.vacancy_id == filtered_vacancies.c.id)
         .join(skill_matches, skill_matches.c.skill_name == VacancySkill.skill_name)
-        .join(skill_totals, skill_totals.c.vacancy_id == Vacancy.id)
+        .join(skill_totals, skill_totals.c.vacancy_id == filtered_vacancies.c.id)
     )
+
+    return await select_all(conn, stmt)
+
+
+async def select_total_importance_perc(
+    conn: AsyncConnection, percentile: float, profile: ScoringProfile
+) -> float | None:
+    filters = []
+    if profile.job_families:
+        filters.append(VacancyExtract.job_family.in_(profile.job_families))
+
+    importance_sum = (
+        sa.select(VacancySkill.vacancy_id, func.sum(VacancySkill.importance).label('sum'))
+        .select_from(VacancyExtract)
+        .join(VacancySkill, VacancySkill.vacancy_id == VacancyExtract.vacancy_id)
+        .where(*filters)
+        .group_by(VacancySkill.vacancy_id)
+        .cte('importance_sum')
+    )
+    res = await select_one(
+        conn,
+        stmt=sa.select(
+            func.percentile_cont(percentile)
+            .within_group(importance_sum.c.sum)
+            .label('sum_percentile')
+        ),
+    )
+    if not res:
+        return None
+
+    return res['sum_percentile']
+
+
+async def select_vacancies_by_ids(
+    conn: AsyncConnection, ids: Sequence[str]
+) -> Sequence[RowMapping]:
+    stmt = sa.select(
+        Vacancy.id,
+        Vacancy.source,
+        Vacancy.category,
+        Vacancy.company,
+        Vacancy.title,
+        Vacancy.url,
+        Vacancy.location_str,
+        Vacancy.salary_min,
+        Vacancy.salary_max,
+        Vacancy.salary_level,
+        Vacancy.experience,
+    ).where(Vacancy.id.in_(ids))
 
     return await select_all(conn, stmt)
 
@@ -594,19 +640,21 @@ async def select_profile_status(
     )
 
 
-async def select_profile_for_scoring(
-    conn: AsyncConnection
-) -> RowMapping | None:
+async def select_profile_for_scoring(conn: AsyncConnection) -> RowMapping | None:
     return await select_one(
-        conn, stmt=(sa.select(
-            Profile.id,
-            Profile.name,
-            Profile.job_families,
-            Profile.english_level,
-            Profile.experience,
-            Profile.seniority,
-        ).where(Profile.status == ProfileStatus.ready, Profile.is_selected.is_(True)))
+        conn,
+        stmt=(
+            sa.select(
+                Profile.id,
+                Profile.name,
+                Profile.job_families,
+                Profile.english_level,
+                Profile.experience,
+                Profile.seniority,
+            ).where(Profile.status == ProfileStatus.ready, Profile.is_selected.is_(True))
+        ),
     )
+
 
 async def select_profile(conn: AsyncConnection, profile_id: str) -> RowMapping | None:
     return await select_one(
