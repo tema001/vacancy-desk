@@ -50,17 +50,6 @@ class ProfileUpdateSchema(BaseModel):
     is_selected: bool
 
 
-class CandidateSkill(BaseModel):
-    skill_name: Annotated[str, StringConstraints(min_length=1, max_length=100)]
-    depth: EnumField[SkillDepth]
-
-
-class ScoringParamsSchema(ParamsSchema):
-    skills: list[CandidateSkill] = Field(min_length=1, max_length=50)
-    job_family: EnumField[JobFamily] | None = None
-    english_level: EnumField[EnglishLevel] | None = None
-
-
 class SkillExtract(BaseModel):
     canonical: str
     depth: EnumField[SkillDepth]
@@ -207,10 +196,41 @@ class ParseJob:
     desc_hash: bytes | None
 
     @classmethod
-    def from_db(cls, data: Mapping[str, Any]) -> 'ParseJob':
+    def from_db(cls, row: Mapping[str, Any]) -> Self:
         return cls(
-            vacancy_id=data['id'],
-            url=data['url'],
-            params_hash=data['params_hash'],
-            desc_hash=data['description_hash'],
+            vacancy_id=row['id'],
+            url=row['url'],
+            params_hash=row['params_hash'],
+            desc_hash=row['description_hash'],
         )
+
+
+@dataclass(slots=True)
+class ScoringProfile:
+    id: str
+    name: str
+    job_families: list[int]
+    english_level: EnglishLevel | None
+    experience: float | None
+    seniority: Seniority | None
+
+    @classmethod
+    def from_db(cls, row: Mapping[str, Any]) -> Self:
+        return cls(
+            id=row['id'],
+            name=row['name'],
+            job_families=row['job_families'],
+            english_level=row['english_level'],
+            experience=row['experience'],
+            seniority=row['seniority'],
+        )
+
+    def to_api(self) -> DataDict:
+        return {
+            'name': self.name,
+            'job_families': (
+                [JobFamily(item).name for item in self.job_families]
+                if self.job_families
+                else None
+            ),
+        }

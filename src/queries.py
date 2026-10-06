@@ -2,7 +2,7 @@ import src.db as db
 from src.enums import JobFamily, ProfileStatus
 from src.scoring import SIMILARITY_THRESHOLD, score_vacancy_matches
 from src.shared.resources import resources
-from src.types import DataDict, ParamsSchema, ScoringParamsSchema
+from src.types import DataDict, ParamsSchema, ScoringProfile
 
 
 async def get_vacancies(params: ParamsSchema) -> DataDict:
@@ -18,23 +18,36 @@ async def get_vacancies(params: ParamsSchema) -> DataDict:
     }
 
 
-async def get_scored_vacancies(params: ScoringParamsSchema) -> DataDict:
+async def get_scored_vacancies() -> DataDict | None:
     async with resources.engine.connect() as conn:
+        profile_raw = await db.select_profile_for_scoring(conn)
+        if not profile_raw:
+            return None
+
+        profile = ScoringProfile.from_db(profile_raw)
         rows = await db.select_vacancy_skill_matches(
             conn,
-            params,
+            profile=profile,
             similarity_threshold=SIMILARITY_THRESHOLD,
         )
+        p25 = await db.select_total_importance_perc(
+            conn, percentile=0.25, profile=profile
+        )
 
-    print(len(rows))
-    scored_rows = score_vacancy_matches(rows)
-    total_count = len(scored_rows)
-    page_rows = scored_rows[params.offset : params.offset + params.limit]
+        scored_rows = score_vacancy_matches(rows, p25)[:30]
+        vacancies = await db.select_vacancies_by_ids(
+            conn, ids=[r['id'] for r in scored_rows]
+        )
+
+    vacancies_map = {v['id']: v for v in vacancies}
+    final_rows = [
+        {**vacancies_map[row['id']], 'score': row['score']} for row in scored_rows
+    ]
 
     return {
-        'total_count': total_count,
-        'has_next': params.offset + params.limit < total_count,
-        'rows': page_rows,
+        'total_count': len(scored_rows),
+        'profile': profile.to_api(),
+        'rows': final_rows,
     }
 
 

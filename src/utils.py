@@ -409,11 +409,11 @@ async def process_lexicon_expanding() -> None:
     with propagate_attributes(prompt=prompt):
         resp = await resources.llm.chat.completions.create(
             name=prompt.name,
-            model=prompt.config['model'],
             messages=compiled_prompt,
-            temperature=0,
+            model=prompt.config['model'],
+            temperature=prompt.config['temperature'],
             response_format={'type': 'json_object'},
-            reasoning_effort='none',
+            reasoning_effort='low',
         )
 
     raw_resp = resp.choices[0].message.content
@@ -439,7 +439,7 @@ async def process_lexicon_expanding() -> None:
         await lexicon_expand.defer_async()
 
         with suppress(AlreadyEnqueued):
-            await lexicon_embed.configure(schedule_in={'minutes': 1}).defer_async()
+            await lexicon_embed.configure(schedule_in={'minutes': 2}).defer_async()
     else:
         with suppress(AlreadyEnqueued):
             await lexicon_embed.defer_async()

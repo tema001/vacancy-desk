@@ -32,7 +32,7 @@ class Seniority(IntEnum):
 class JobFamily(IntEnum):
     backend = 1
     frontend = 2
-    mobile = 3
+    fullstack = 3
     data = 4
     qa = 5
     devops = 6
@@ -42,7 +42,10 @@ class JobFamily(IntEnum):
     delivery = 10
     design = 11
     support = 12
-    other = 13
+    ai_ml = 13
+    mobile = 14
+
+    other = 1000
 
 
 class SkillDepth(IntEnum):
@@ -55,6 +58,8 @@ class SkillDepth(IntEnum):
 class SkillKind(IntEnum):
     hard = 1
     soft = 2
+
+    dev_test = 100
 
 
 class ProfileStatus(IntEnum):

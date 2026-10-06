@@ -36,3 +36,16 @@ export interface VacanciesPage {
   has_next: boolean
   rows: Vacancy[]
 }
+
+export interface ScoredVacancy extends Omit<Vacancy, 'status' | 'date_started'> {
+  score: number
+}
+
+export interface ScoredVacancies {
+  total_count: number
+  profile: {
+    name: string
+    job_families: string[] | null
+  }
+  rows: ScoredVacancy[]
+}
