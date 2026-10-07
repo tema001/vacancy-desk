@@ -6,6 +6,8 @@ from procrastinate import RetryStrategy, exceptions
 from src import db, utils
 from src.enums import VacancyStatus
 from src.jobs import (
+    CHUNK_EMBED,
+    CHUNK_VACANCY,
     ENQUEUE_VACANCIES,
     EXTRACT_PROFILE,
     EXTRACT_VACANCY,
@@ -66,6 +68,21 @@ async def lexicon_embed() -> None:
     await utils.process_lexicon_embedding()
 
 
+@app.task(name=CHUNK_VACANCY, retry=RetryStrategy(max_attempts=2, wait=30))
+async def chunk_vacancy(*, vacancy_id: str) -> None:
+    await utils.process_vacancy_chunking(vacancy_id)
+
+
+@app.task(
+    name=CHUNK_EMBED,
+    queueing_lock='chunk_embed',
+    lock='chunk_embed',
+    retry=RetryStrategy(max_attempts=2, wait=30),
+)
+async def chunk_embed() -> None:
+    await utils.process_chunk_embedding()
+
+
 @app.task(name=ENQUEUE_VACANCIES, queueing_lock='enqueue_vacancies')
 async def enqueue_vacancies(status: VacancyStatus | None = None) -> None:
     async with resources.engine.connect() as conn:
@@ -76,7 +93,7 @@ async def enqueue_vacancies(status: VacancyStatus | None = None) -> None:
     for i, row in enumerate(rows):
         try:
             lock_id = row['id']
-            schedule_sec = (i * 8) + random.uniform(0.5, 5.0)  # noqa: S311
+            schedule_sec = (i * 4) + random.uniform(0.5, 5.0)  # noqa: S311
 
             await parse_vacancy.configure(
                 queueing_lock=f'parse:{lock_id}',

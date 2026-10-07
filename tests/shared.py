@@ -208,7 +208,10 @@ class ParseMock:
     def __init__(self, monkeypatch: pytest.MonkeyPatch) -> None:
         self.extract = MagicMock()
         self.extract.configure.return_value.defer_async = AsyncMock()
+        self.chunk = MagicMock()
+        self.chunk.configure.return_value.defer_async = AsyncMock()
         monkeypatch.setattr('src.tasks.extract_vacancy', self.extract)
+        monkeypatch.setattr('src.tasks.chunk_vacancy', self.chunk)
         monkeypatch.setattr('src.utils.fetch_vacancy_body', self._empty_fetch)
         self._monkeypatch = monkeypatch
 

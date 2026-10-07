@@ -14,6 +14,7 @@ from src.models import (
     SkillLexicon,
     VacanciesActivity,
     Vacancy,
+    VacancyChunk,
     VacancyExtract,
     VacancySkill,
     VacancyStatus,
@@ -398,7 +399,7 @@ async def select_vacancy_skill_matches(
     return await select_all(conn, stmt)
 
 
-async def select_total_importance_perc(
+async def select_total_importance_percentile(
     conn: AsyncConnection, percentile: float, profile: ScoringProfile
 ) -> float | None:
     filters = []
@@ -630,6 +631,116 @@ async def insert_vacancy_skills(
     conn: AsyncConnection, data: DataDict | list[DataDict]
 ) -> None:
     await conn.execute(insert(VacancySkill).values(data))
+
+
+async def select_vacancy_for_chunk(
+    conn: AsyncConnection, vacancy_id: str, *, lock: bool = False
+) -> RowMapping | None:
+    stmt = sa.select(Vacancy.id, Vacancy.title, Vacancy.description).where(
+        Vacancy.id == vacancy_id
+    )
+    if lock:
+        stmt = stmt.with_for_update()
+
+    return await select_one(conn, stmt)
+
+
+async def select_vacancy_chunk_state(
+    conn: AsyncConnection, vacancy_id: str
+) -> Sequence[RowMapping]:
+    return await select_all(
+        conn,
+        stmt=(
+            sa.select(
+                VacancyChunk.fragment,
+                VacancyChunk.content_hash,
+                VacancyChunk.embedding.is_(None).label('needs_embed'),
+            )
+            .where(VacancyChunk.vacancy_id == vacancy_id)
+            .order_by(VacancyChunk.fragment)
+        ),
+    )
+
+
+async def replace_vacancy_chunks(
+    conn: AsyncConnection, vacancy_id: str, data: list[DataDict]
+) -> None:
+    await conn.execute(
+        sa.delete(VacancyChunk).where(VacancyChunk.vacancy_id == vacancy_id)
+    )
+    if data:
+        await conn.execute(insert(VacancyChunk).values(data))
+
+
+async def select_vacancy_chunks_for_embed(
+    conn: AsyncConnection, limit: int
+) -> Sequence[RowMapping]:
+    return await select_all(
+        conn,
+        stmt=(
+            sa.select(VacancyChunk.id, VacancyChunk.content)
+            .where(VacancyChunk.embedding.is_(None))
+            .order_by(VacancyChunk.id)
+            .limit(limit + 1)
+        ),
+    )
+
+
+async def update_vacancy_chunk_embed(
+    conn: AsyncConnection, data: DataDict | list[DataDict]
+) -> None:
+    stmt = (
+        sa.update(VacancyChunk)
+        .where(
+            VacancyChunk.id == sa.bindparam('b_id'),
+            VacancyChunk.embedding.is_(None),
+        )
+        .values(
+            embedding=sa.bindparam('b_embedding'),
+            embedding_model=sa.bindparam('b_embedding_model'),
+        )
+    )
+    b_data = [
+        {
+            'b_id': d['id'],
+            'b_embedding': d['embedding'],
+            'b_embedding_model': d['embedding_model'],
+        }
+        for d in data
+    ]
+
+    await conn.execute(stmt, b_data)
+
+
+async def select_contained_vacancies(
+    conn: AsyncConnection, keywords: list[str]
+) -> Sequence[RowMapping]:
+    query = """
+WITH tokenized AS (
+    SELECT
+        id,
+        ARRAY(
+            SELECT lower(m[1])
+            FROM regexp_matches(
+                title || ' ' || description,
+                '[a-z0-9]+(?:[+#]+|\\.[a-z0-9]+)*',
+                'gi'
+            ) AS m
+        ) AS tokens
+    FROM vacancies
+    WHERE status = 2
+),
+all_info AS (
+    SELECT
+        *,
+        COUNT(*) OVER () AS total_count,
+        AVG(COALESCE(array_length(tokens, 1), 0)) OVER () AS avg_length
+    FROM tokenized
+)
+SELECT * FROM all_info WHERE tokens && :keywords;
+"""
+
+    return await select_all(conn, stmt=sa.text(query).bindparams(keywords=keywords))
 
 
 async def select_profile_status(

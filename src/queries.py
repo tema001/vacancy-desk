@@ -1,6 +1,6 @@
 import src.db as db
 from src.enums import JobFamily, ProfileStatus
-from src.scoring import SIMILARITY_THRESHOLD, score_vacancy_matches
+from src.scoring import SIMILARITY_THRESHOLD, rank_bm25, rank_vacancy_matches
 from src.shared.resources import resources
 from src.types import DataDict, ParamsSchema, ScoringProfile
 
@@ -30,19 +30,17 @@ async def get_scored_vacancies() -> DataDict | None:
             profile=profile,
             similarity_threshold=SIMILARITY_THRESHOLD,
         )
-        p25 = await db.select_total_importance_perc(
+        p25 = await db.select_total_importance_percentile(
             conn, percentile=0.25, profile=profile
         )
 
-        scored_rows = score_vacancy_matches(rows, p25)[:30]
+        scored_rows = rank_vacancy_matches(rows, p25)[:30]
         vacancies = await db.select_vacancies_by_ids(
-            conn, ids=[r['id'] for r in scored_rows]
+            conn, ids=[r[0] for r in scored_rows]
         )
 
     vacancies_map = {v['id']: v for v in vacancies}
-    final_rows = [
-        {**vacancies_map[row['id']], 'score': row['score']} for row in scored_rows
-    ]
+    final_rows = [{**vacancies_map[row[0]], 'score': row[1]} for row in scored_rows]
 
     return {
         'total_count': len(scored_rows),
@@ -110,3 +108,17 @@ async def get_profile(profile_id: str) -> DataDict | None:
             for skill in skills
         ],
     }
+
+
+async def get_search_response(search_query: str) -> None:
+    keywords = ['react', 'typescript']
+
+    async with resources.engine.connect() as conn:
+        rows = await db.select_contained_vacancies(conn, keywords)
+
+    f = rows[0]
+    bm25_scores = rank_bm25(
+        keywords, rows, N=int(f['total_count']), avg_dl=float(f['avg_length'])
+    )
+
+    assert len(rows) == len(bm25_scores)
