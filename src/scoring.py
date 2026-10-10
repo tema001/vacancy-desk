@@ -1,10 +1,13 @@
-from collections.abc import Sequence
+import math
+from collections import Counter
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from src.types import DataDict
+type RankSeq = Sequence[tuple[str, Any]]
 
 SIMILARITY_THRESHOLD = 0.38
+RRF_K = 60
 
 
 @dataclass(slots=True)
@@ -19,9 +22,12 @@ def _depth_fit(user_depth: int, required_depth: int) -> float:
     return user_depth / required_depth
 
 
-def score_vacancy_matches(
+def rank_vacancy_matches(
     rows: Sequence[Any], sum_percentile: float | None
-) -> list[DataDict]:
+) -> list[tuple[str, float]]:
+    """
+    Returns ranked by score tuple(vacancy_id, match_score)
+    """
     scores: dict[str, _VacancyScore] = {}
 
     for row in rows:
@@ -42,7 +48,7 @@ def score_vacancy_matches(
         )
         vacancy_score.weighted_sum += row['importance'] * similarity * depth_fit
 
-    result: list[DataDict] = []
+    result = []
     for vacancy_id, item in scores.items():
         if item.total_importance <= 0:
             continue
@@ -53,12 +59,66 @@ def score_vacancy_matches(
             completeness = 1
 
         score = (100.0 * item.weighted_sum / item.total_importance) * completeness
-        result.append(
-            {
-                'id': vacancy_id,
-                'score': round(score, 2),
-            }
-        )
+        result.append((vacancy_id, round(score, 3)))
 
-    result.sort(key=lambda vacancy: vacancy['score'], reverse=True)
+    result.sort(key=lambda item: item[1], reverse=True)
     return result
+
+
+# TODO: Add gin index. Compare with pg_search
+def rank_bm25(
+    keywords: Collection[str],
+    documents: Sequence[Mapping[str, Any]],
+    N: int,
+    avg_dl: float,
+) -> list[tuple[str, float]]:
+    """
+    Returns ranked by score tuple(vacancy_id, bm25_score)
+    """
+    kw_doc_c = Counter()
+    kw_reps = []
+
+    for doc in documents:
+        counter = Counter()
+        for term in doc['tokens']:
+            if term in keywords:
+                counter[term] += 1
+
+        for term, count in counter.items():
+            if count > 0:
+                kw_doc_c[term] += 1
+
+        kw_reps.append(counter)
+
+    k = 1.2
+    b = 0.75
+
+    scores = []
+    for i, doc in enumerate(documents):
+        score = 0
+        doc_len = len(doc['tokens'])
+        for t in keywords:
+            idf = math.log((N - kw_doc_c[t] + 0.5) / (kw_doc_c[t] + 0.5) + 1)
+            m = (
+                kw_reps[i][t]
+                * (k + 1)
+                / (kw_reps[i][t] + k * (1 - b + b * (doc_len / avg_dl)))
+            )
+
+            score += idf * m
+
+        scores.append((doc['id'], score))
+
+    scores.sort(key=lambda item: item[1], reverse=True)
+    return scores
+
+
+def rrf(bm25_ranks: RankSeq, vector_ranks: RankSeq) -> list[tuple[str, float]]:
+    """Reciprocal Rank Fusion"""
+    scores = {}
+    for rank, (vacancy_id, _) in enumerate(bm25_ranks, start=1):
+        scores[vacancy_id] = scores.get(vacancy_id, 0.0) + 1 / (RRF_K + rank)
+    for rank, (vacancy_id, _) in enumerate(vector_ranks, start=1):
+        scores[vacancy_id] = scores.get(vacancy_id, 0.0) + 1 / (RRF_K + rank)
+
+    return sorted(scores.items(), key=lambda item: item[1], reverse=True)

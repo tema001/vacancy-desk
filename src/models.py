@@ -102,6 +102,37 @@ class VacanciesActivity(Base):
     date_ended: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
+class VacancyChunk(Base):
+    __tablename__ = 'vacancy_chunks'
+    __table_args__ = (
+        UniqueConstraint(
+            'vacancy_id', 'fragment', name='uq_vacancy_chunks_vacancy_id_fragment'
+        ),
+        Index(
+            'ix_vacancy_chunks_embedding',
+            'embedding',
+            postgresql_using='hnsw',
+            postgresql_with={'m': 16, 'ef_construction': 64},
+            postgresql_ops={'embedding': 'vector_cosine_ops'},
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False),
+        primary_key=True,
+        server_default=text('uuidv7()'),
+    )
+    vacancy_id: Mapped[str] = mapped_column(
+        ForeignKey('vacancies.id', ondelete='CASCADE'), index=True
+    )
+    fragment: Mapped[int] = mapped_column(SmallInteger)
+    content: Mapped[str] = mapped_column(Text)
+    content_hash: Mapped[bytes] = mapped_column(LargeBinary(32))
+
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(1536))
+    embedding_model: Mapped[str | None]
+
+
 class SkillLexicon(Base):
     __tablename__ = 'skill_lexicon'
 

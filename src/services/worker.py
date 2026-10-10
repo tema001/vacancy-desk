@@ -33,7 +33,7 @@ async def run() -> None:
     importlib.import_module('src.cron')
     importlib.import_module('src.tasks')
 
-    await resources.start(start_llm=True)
+    await resources.start(start_llm=True, warmup_llm=True)
     try:
         async with app.open_async():
             await app.run_worker_async()

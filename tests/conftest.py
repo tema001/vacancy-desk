@@ -7,7 +7,7 @@ from tests.shared import ParseMock
 
 @pytest.fixture(scope='session')
 async def init_resources():
-    await resources.start(start_llm=False)
+    await resources.start()
     yield
     await resources.stop()
 

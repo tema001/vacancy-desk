@@ -1,7 +1,10 @@
+import hashlib
 import json
 import re
+from collections.abc import Mapping
 from contextlib import suppress
 from datetime import date
+from typing import Any
 
 import feedparser
 from httpx2 import HTTPStatusError
@@ -16,6 +19,7 @@ from src.geo import canonicalize
 from src.seniority import seniority_from_title
 from src.shared.resources import resources
 from src.shared.utils import dt_now
+from src.splitters import split_vacancy_text
 from src.types import (
     ExperiencePeriod,
     FullParsedPage,
@@ -241,12 +245,16 @@ async def process_vacancy_page(job: ParseJob) -> None:
             raise ValueError
 
     if defer_extract:
-        from src.tasks import extract_vacancy
+        from src.tasks import chunk_vacancy, extract_vacancy
 
         with suppress(AlreadyEnqueued):
             await extract_vacancy.configure(
                 queueing_lock=f'extract:{vacancy_id}', lock=vacancy_id
             ).defer_async(vacancy_id=vacancy_id)
+
+        await chunk_vacancy.configure(
+            queueing_lock=f'chunk:{vacancy_id}', lock=vacancy_id
+        ).defer_async(vacancy_id=vacancy_id)
 
 
 async def _sync_skills_into_lexicon[T: SkillExtract](
@@ -351,7 +359,6 @@ async def process_vacancy_extract(vacancy_id: str) -> None:
         return
 
     compiled_prompt = prompt.compile(
-        seniority_field='',
         title=row['title'],
         experience=row['experience'],
         description=row['description'],
@@ -443,6 +450,123 @@ async def process_lexicon_expanding() -> None:
     else:
         with suppress(AlreadyEnqueued):
             await lexicon_embed.defer_async()
+
+
+async def _write_vacancy_chunks(conn: AsyncConnection, row: Mapping[str, Any]) -> bool:
+    vacancy_id = row['id']
+    # do not quit early for empty list, need to delete stored chunks
+    chunks = split_vacancy_text(row['title'], row['description'])
+    print(f'Vacancy chunking. Chunks: {[len(ch) for ch in chunks]}')
+    # sorted by fragment
+    existing = await db.select_vacancy_chunk_state(conn, vacancy_id)
+
+    len_ch = len(chunks)
+    len_ex = len(existing)
+
+    hashes = [hashlib.sha256(content.encode()).digest() for content in chunks]
+    assert len_ch == len(hashes)
+
+    need_embed = False
+    update_c = skip_c = delete_c = new_c = 0  # c - count
+
+    for i, ch in enumerate(chunks[:len_ex]):
+        item = existing[i]
+        if item['content_hash'] != hashes[i]:
+            await db.update_vacancy_chunk(
+                conn,
+                chunk_id=item['id'],
+                data={
+                    'id': item['id'],
+                    'content_hash': hashes[i],
+                    'content': ch,
+                    'embedding': None,
+                    'embedding_model': None,
+                },
+            )
+            need_embed = True
+            update_c += 1
+        else:
+            need_embed = need_embed or item['needs_embed']
+            skip_c += 1
+
+    if len_ex > len_ch:
+        await db.delete_vacancy_chunks_from(conn, vacancy_id, from_=len_ch)
+        delete_c = len_ex - len_ch
+    elif len_ex < len_ch:
+        insert_items = [
+            {
+                'vacancy_id': vacancy_id,
+                'content_hash': hashes[i],
+                'content': chunks[i],
+                'fragment': i,
+            }
+            for i in range(len_ex, len_ch)
+        ]
+        await db.insert_vacancy_chunks(conn, insert_items)
+        need_embed = True
+        new_c = len_ch - len_ex
+
+    print(
+        f'Vacancy chunking. Chunks processed. '
+        f'Updated: {update_c}, skipped: {skip_c}, deleted: {delete_c}, created: {new_c}'
+    )
+
+    return need_embed
+
+
+async def process_vacancy_chunking(vacancy_id: str) -> None:
+    async with resources.engine.begin() as conn:
+        row = await db.select_vacancy_for_chunk(conn, vacancy_id, lock=True)
+        if not row:
+            print('Vacancy chunking. Vacancy not found!')
+            return
+
+        needs_embed = await _write_vacancy_chunks(conn, row)
+
+    if needs_embed:
+        from src.tasks import chunk_embed
+
+        with suppress(AlreadyEnqueued):
+            await chunk_embed.configure(schedule_in={'minutes': 2}).defer_async()
+
+
+async def process_chunk_embedding() -> None:
+    model = resources.config['llm']['embedding_model']
+    limit = 64
+
+    async with resources.engine.connect() as conn:
+        rows = await db.select_vacancy_chunks_for_embed(conn, limit=limit)
+
+    if not rows:
+        return
+
+    batch = rows[:limit]
+    resp = await resources.llm.embeddings.create(
+        name='chunk-embed',
+        model=model,
+        input=[row['content'] for row in batch],
+        dimensions=1536,
+    )
+    by_index = {item.index: item.embedding for item in resp.data}
+    if len(by_index) != len(batch):
+        raise RuntimeError('Chunk embedding. Unexpected embedding count!')
+
+    update_items = [
+        {
+            'id': row['id'],
+            'content_hash': row['content_hash'],
+            'embedding': by_index[i],
+            'embedding_model': model,
+        }
+        for i, row in enumerate(batch)
+    ]
+    async with resources.engine.begin() as conn:
+        saved = await db.update_vacancy_chunk_embed(conn, update_items)
+
+    if len(rows) > limit or saved < len(batch):
+        from src.tasks import chunk_embed
+
+        await chunk_embed.defer_async()
 
 
 async def process_lexicon_embedding() -> None:

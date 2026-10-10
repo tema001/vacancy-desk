@@ -74,7 +74,7 @@ class Resources:
 
         return self.langfuse.get_prompt(name, type='chat', label=label)
 
-    async def start(self, start_llm: bool = False) -> None:
+    async def start(self, start_llm: bool = False, warmup_llm: bool = False) -> None:
         self.load_config()
 
         if self._client is None:
@@ -111,6 +111,7 @@ class Resources:
             if self._langfuse is None:
                 self.set_langfuse(Langfuse())
 
+            if warmup_llm and self._langfuse:
                 # warmup prompts
                 names = ('vacancy-extract', 'profile-extract', 'lexicon-expand')
                 async with asyncio.TaskGroup() as tg:
