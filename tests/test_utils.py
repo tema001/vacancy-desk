@@ -73,15 +73,17 @@ def test_long_description_keeps_title_and_the_ending() -> None:
     assert chunks[-1].endswith('benefits and visa')
 
 
-def test_chunk_continues_to_the_next_sentence() -> None:
+def test_chunk_stops_at_the_last_sentence_that_fits() -> None:
     sentence = 'We need strong Python skills. '
     chunks = split_vacancy_text('Backend', sentence * 100)
     header = 'Title: Backend\n\n'
     bodies = [chunk.removeprefix(header) for chunk in chunks]
+    budget = CHUNK_CHARS - len(header)
 
     assert len(bodies) > 1
-    assert all(body.endswith('.') for body in bodies)
-    assert len(bodies[0]) >= CHUNK_CHARS - len(header)
+    assert all(body.rstrip().endswith('.') for body in bodies)
+    assert len(bodies[0]) <= budget
+    assert len(bodies[0]) + len(sentence) > budget
 
 
 def test_overlap_starts_after_a_sentence() -> None:
@@ -90,7 +92,9 @@ def test_overlap_starts_after_a_sentence() -> None:
     bodies = [chunk.removeprefix('Title: Backend\n\n') for chunk in chunks]
 
     assert len(bodies) > 1
-    assert all(body.startswith('We need strong Python skills.') for body in bodies[1:])
+    assert all(
+        body.lstrip().startswith('We need strong Python skills.') for body in bodies[1:]
+    )
 
 
 def test_overlap_starts_after_a_newline() -> None:
@@ -110,12 +114,13 @@ def test_short_last_chunk_is_appended_without_counting_the_title() -> None:
         'areas independently and helping shape engineering decisions as the '
         'platform evolves.'
     )
-    description = f'{"We need strong Python skills. " * 120}\n\n{tail}'
-    chunks = split_vacancy_text(title, description)
+    base = 'We need strong Python skills. ' * 120
+    chunks = split_vacancy_text(title, f'{base}\n\n{tail}')
     bodies = [chunk.removeprefix(header) for chunk in chunks]
 
     assert len(header) + len(tail) >= MIN_CHUNK_CHARS
     assert len(tail) < MIN_CHUNK_CHARS
+    assert len(chunks) == len(split_vacancy_text(title, base))
     assert all(len(body) >= MIN_CHUNK_CHARS for body in bodies)
     assert bodies[-1].endswith(tail)
 

@@ -1,8 +1,8 @@
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from datetime import datetime, timedelta
 
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.dialects.postgresql import ARRAY, insert
 from sqlalchemy.engine.result import RowMapping
 from sqlalchemy.ext.asyncio.engine import AsyncConnection
 from sqlalchemy.sql import Executable, asc, desc, func
@@ -20,6 +20,8 @@ from src.models import (
     VacancyStatus,
 )
 from src.types import DataDict, ParamsSchema, ScoringProfile
+
+TOKEN_RE = r'[a-z0-9]+(?:[+#]+|\.[a-z0-9]+|-[a-z0-9]+)*'  # noqa: S105
 
 
 async def select_all(conn: AsyncConnection, stmt: Executable) -> Sequence[RowMapping]:
@@ -443,6 +445,7 @@ async def select_vacancies_by_ids(
         Vacancy.salary_max,
         Vacancy.salary_level,
         Vacancy.experience,
+        Vacancy.status,
     ).where(Vacancy.id.in_(ids))
 
     return await select_all(conn, stmt)
@@ -652,7 +655,7 @@ async def select_vacancy_chunk_state(
         conn,
         stmt=(
             sa.select(
-                VacancyChunk.fragment,
+                VacancyChunk.id,
                 VacancyChunk.content_hash,
                 VacancyChunk.embedding.is_(None).label('needs_embed'),
             )
@@ -662,14 +665,30 @@ async def select_vacancy_chunk_state(
     )
 
 
-async def replace_vacancy_chunks(
-    conn: AsyncConnection, vacancy_id: str, data: list[DataDict]
+async def update_vacancy_chunk(
+    conn: AsyncConnection, chunk_id: str, data: DataDict
 ) -> None:
     await conn.execute(
-        sa.delete(VacancyChunk).where(VacancyChunk.vacancy_id == vacancy_id)
+        sa.update(VacancyChunk).values(data).where(VacancyChunk.id == chunk_id)
     )
-    if data:
-        await conn.execute(insert(VacancyChunk).values(data))
+
+
+async def delete_vacancy_chunks_from(
+    conn: AsyncConnection, vacancy_id: str, from_: int
+) -> None:
+    await conn.execute(
+        statement=(
+            sa.delete(VacancyChunk).where(
+                VacancyChunk.vacancy_id == vacancy_id, VacancyChunk.fragment >= from_
+            )
+        )
+    )
+
+
+async def insert_vacancy_chunks(
+    conn: AsyncConnection, data: DataDict | list[DataDict]
+) -> None:
+    await conn.execute(insert(VacancyChunk).values(data))
 
 
 async def select_vacancy_chunks_for_embed(
@@ -678,7 +697,7 @@ async def select_vacancy_chunks_for_embed(
     return await select_all(
         conn,
         stmt=(
-            sa.select(VacancyChunk.id, VacancyChunk.content)
+            sa.select(VacancyChunk.id, VacancyChunk.content, VacancyChunk.content_hash)
             .where(VacancyChunk.embedding.is_(None))
             .order_by(VacancyChunk.id)
             .limit(limit + 1)
@@ -686,13 +705,12 @@ async def select_vacancy_chunks_for_embed(
     )
 
 
-async def update_vacancy_chunk_embed(
-    conn: AsyncConnection, data: DataDict | list[DataDict]
-) -> None:
+async def update_vacancy_chunk_embed(conn: AsyncConnection, data: list[DataDict]) -> int:
     stmt = (
         sa.update(VacancyChunk)
         .where(
             VacancyChunk.id == sa.bindparam('b_id'),
+            VacancyChunk.content_hash == sa.bindparam('b_content_hash'),
             VacancyChunk.embedding.is_(None),
         )
         .values(
@@ -700,47 +718,79 @@ async def update_vacancy_chunk_embed(
             embedding_model=sa.bindparam('b_embedding_model'),
         )
     )
-    b_data = [
-        {
-            'b_id': d['id'],
-            'b_embedding': d['embedding'],
-            'b_embedding_model': d['embedding_model'],
-        }
-        for d in data
-    ]
+    saved = 0
+    for item in data:
+        result = await conn.execute(
+            stmt,
+            {
+                'b_id': item['id'],
+                'b_content_hash': item['content_hash'],
+                'b_embedding': item['embedding'],
+                'b_embedding_model': item['embedding_model'],
+            },
+        )
+        saved += result.rowcount
+    return saved
 
-    await conn.execute(stmt, b_data)
 
-
-async def select_contained_vacancies(
-    conn: AsyncConnection, keywords: list[str]
+async def select_vacancies_for_bm25(
+    conn: AsyncConnection, keywords: Iterable[str]
 ) -> Sequence[RowMapping]:
-    query = """
-WITH tokenized AS (
-    SELECT
-        id,
-        ARRAY(
-            SELECT lower(m[1])
-            FROM regexp_matches(
-                title || ' ' || description,
-                '[a-z0-9]+(?:[+#]+|\\.[a-z0-9]+)*',
-                'gi'
-            ) AS m
-        ) AS tokens
-    FROM vacancies
-    WHERE status = 2
-),
-all_info AS (
-    SELECT
-        *,
-        COUNT(*) OVER () AS total_count,
-        AVG(COALESCE(array_length(tokens, 1), 0)) OVER () AS avg_length
-    FROM tokenized
-)
-SELECT * FROM all_info WHERE tokens && :keywords;
-"""
+    match = func.regexp_matches(
+        Vacancy.title + ' ' + Vacancy.description,
+        TOKEN_RE,
+        'gi',
+        type_=ARRAY(sa.Text),
+    ).column_valued('m')
 
-    return await select_all(conn, stmt=sa.text(query).bindparams(keywords=keywords))
+    tokenized = (
+        sa.select(
+            Vacancy.id,
+            func.array(
+                sa.select(func.lower(match[1])).correlate(Vacancy).scalar_subquery(),
+                type_=ARRAY(sa.Text),
+            ).label('tokens'),
+        )
+        .where(Vacancy.status == VacancyStatus.active)
+        .cte('tokenized')
+    )
+    all_info = sa.select(
+        tokenized.c.id,
+        tokenized.c.tokens,
+        func.count().over().label('total_count'),
+        func.avg(func.coalesce(func.array_length(tokenized.c.tokens, 1), 0))
+        .over()
+        .label('avg_length'),
+    ).cte('all_info')
+
+    return await select_all(
+        conn, stmt=sa.select(all_info).where(all_info.c.tokens.overlap(keywords))
+    )
+
+
+async def select_vacancy_similarities(
+    conn: AsyncConnection, embed_query: Iterable[float]
+) -> Sequence[RowMapping]:
+    similarity = 1 - VacancyChunk.embedding.cosine_distance(embed_query)
+    cos_sim = (
+        sa.select(VacancyChunk.vacancy_id, similarity.label('similarity'))
+        .join(Vacancy, Vacancy.id == VacancyChunk.vacancy_id)
+        .where(Vacancy.status == VacancyStatus.active)
+        .cte('cos_sim')
+    )
+
+    max_similarity = func.max(cos_sim.c.similarity).label('similarity')
+
+    return await select_all(
+        conn,
+        stmt=(
+            sa.select(cos_sim.c.vacancy_id, max_similarity)
+            .where(cos_sim.c.similarity > 0.3)
+            .group_by(cos_sim.c.vacancy_id)
+            .order_by(max_similarity.desc())
+            .limit(50)
+        ),
+    )
 
 
 async def select_profile_status(

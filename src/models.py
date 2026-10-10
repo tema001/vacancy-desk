@@ -123,7 +123,7 @@ class VacancyChunk(Base):
         server_default=text('uuidv7()'),
     )
     vacancy_id: Mapped[str] = mapped_column(
-        ForeignKey('vacancies.id', ondelete='CASCADE')
+        ForeignKey('vacancies.id', ondelete='CASCADE'), index=True
     )
     fragment: Mapped[int] = mapped_column(SmallInteger)
     content: Mapped[str] = mapped_column(Text)

@@ -1,122 +1,64 @@
 import re
+from collections.abc import Iterable, Iterator
 
 CHUNK_CHARS = 2000
 CHUNK_OVERLAP = 150
 MIN_CHUNK_CHARS = 200
 
+_LEVELS = (
+    re.compile(r'.+?(?:\n\s*\n|\Z)', re.S),
+    re.compile(r'[^.\n]*[.\n]\s*|[^.\n]+'),
+    re.compile(r'\S+\s*|\s+'),
+)
+_BOUNDARY = re.compile(r'[.\n]')
+
 
 def split_vacancy_text(title: str, body: str) -> list[str]:
-    if not body:
+    if not body.strip():
         return []
-
     header = f'Title: {title}\n\n'
+
     if len(header) + len(body) <= CHUNK_CHARS:
         return [f'{header}{body}']
 
     budget = CHUNK_CHARS - len(header)
-    return [
-        f'{header}{part}' for part in _split_into_chunks(body, budget, CHUNK_OVERLAP)
-    ]
+    chunks = _merge(_pieces(body, budget), budget, CHUNK_OVERLAP)
+
+    return [f'{header}{chunk}' for chunk in chunks]
 
 
-def _split_into_chunks(text: str, chunk_size: int, overlap: int) -> list[str]:
-    paragraphs = [part for part in re.split(r'\n\s*\n', text) if part]
-    if not paragraphs:
-        chunks = _split_long_text(text, chunk_size, overlap)
+def _pieces(text: str, size: int, level: int = 0) -> Iterator[str]:
+    if len(text) <= size:
+        yield text
+    elif level == len(_LEVELS):
+        yield from (text[i : i + size] for i in range(0, len(text), size))
     else:
-        chunks = []
-        draft_chunk = ''
-        for paragraph in paragraphs:
-            if len(paragraph) > chunk_size:
-                if draft_chunk:
-                    chunks.append(draft_chunk)
-                    draft_chunk = ''
-                chunks.extend(_split_long_text(paragraph, chunk_size, overlap))
-                continue
-
-            candidate = f'{draft_chunk}\n\n{paragraph}' if draft_chunk else paragraph
-            if len(candidate) <= chunk_size:
-                draft_chunk = candidate
-                continue
-
-            chunks.append(draft_chunk)
-            overlap_text = _get_overlap_text(draft_chunk, overlap)
-            draft_chunk = f'{overlap_text}\n\n{paragraph}' if overlap_text else paragraph
-            if len(draft_chunk) > chunk_size:
-                draft_chunk = paragraph
-
-        if draft_chunk:
-            chunks.append(draft_chunk)
-
-    if len(chunks) > 1 and len(chunks[-1]) < MIN_CHUNK_CHARS:
-        chunks[-2] = f'{chunks[-2]}\n\n{chunks[-1]}'
-        chunks.pop()
-    return chunks
+        for part in _LEVELS[level].findall(text):
+            yield from _pieces(part, size, level + 1)
 
 
-def _get_overlap_text(text: str, overlap: int) -> str:
-    """Return the ending of this chunk to copy onto the next chunk.
+def _merge(pieces: Iterable[str], size: int, overlap: int) -> list[str]:
+    chunks: list[str] = []
+    draft = ''
+    carried = 0
+    for piece in pieces:
+        if draft and len(draft) + len(piece) > size:
+            chunks.append(draft)
+            tail = _overlap_tail(draft, overlap)
+            draft = tail if len(tail) + len(piece) <= size else ''
+            carried = len(draft)
+        draft += piece
 
-    Looks at the last `overlap` characters. If a period or newline is there,
-    returns the text after it. Otherwise returns an empty string.
-    """
-    if overlap <= 0 or not text:
-        return ''
+    if chunks and len(draft) - carried < MIN_CHUNK_CHARS:
+        chunks[-1] += draft[carried:]
+    else:
+        chunks.append(draft)
 
-    cut = max(len(text) - overlap, 0)
-    start = _boundary_after(text, cut, len(text))
-    if start is None:
-        return ''
-    return text[start:].lstrip()
-
-
-def _split_long_text(text: str, size: int, overlap: int) -> list[str]:
-    parts: list[str] = []
-    start = 0
-    while start < len(text):
-        end = min(start + size, len(text))
-        if end < len(text):
-            boundary = _boundary_after(text, end, len(text))
-            if boundary is not None:
-                end = boundary
-            else:
-                split_at = text.rfind(' ', start, end)
-                if split_at > start:
-                    end = split_at
-
-        part = text[start:end].strip()
-        if part:
-            parts.append(part)
-        if end >= len(text):
-            break
-        start = _next_overlap_start(text, start, end, overlap)
-    return parts
+    return [chunk for chunk in chunks]
 
 
-def _next_overlap_start(text: str, start: int, end: int, overlap: int) -> int:
-    """Return where the next chunk should start in `text`.
+def _overlap_tail(text: str, overlap: int) -> str:
+    match = _BOUNDARY.search(text, max(len(text) - overlap, 0))
+    tail = text[match.end() :] if match else ''
 
-    Checks the last `overlap` characters of the chunk that just ended.
-    If a period or newline is there, the next chunk starts just after it,
-    so that ending is copied. If not, the next chunk starts at `end`.
-    """
-    cut = max(end - overlap, start + 1)
-    boundary = _boundary_after(text, cut, end)
-    if boundary is None or boundary <= start:
-        return end
-    return boundary
-
-
-def _boundary_after(text: str, cut: int, end: int) -> int | None:
-    """Return the position right after the first period or newline.
-
-    The search is only inside `text[cut:end]`. Returns None if that range
-    has no period and no newline.
-    """
-    window = text[cut:end]
-    dot = window.find('.')
-    newline = window.find('\n')
-    positions = [index for index in (dot, newline) if index != -1]
-    if not positions:
-        return None
-    return cut + min(positions) + 1
+    return tail if tail.strip() else ''

@@ -1,10 +1,13 @@
 import math
 from collections import Counter
-from collections.abc import Mapping, Sequence
+from collections.abc import Collection, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
+type RankSeq = Sequence[tuple[str, Any]]
+
 SIMILARITY_THRESHOLD = 0.38
+RRF_K = 60
 
 
 @dataclass(slots=True)
@@ -62,8 +65,12 @@ def rank_vacancy_matches(
     return result
 
 
+# TODO: Add gin index. Compare with pg_search
 def rank_bm25(
-    keywords: list[str], documents: list[Mapping[str, Any]], N: int, avg_dl: float
+    keywords: Collection[str],
+    documents: Sequence[Mapping[str, Any]],
+    N: int,
+    avg_dl: float,
 ) -> list[tuple[str, float]]:
     """
     Returns ranked by score tuple(vacancy_id, bm25_score)
@@ -104,3 +111,14 @@ def rank_bm25(
 
     scores.sort(key=lambda item: item[1], reverse=True)
     return scores
+
+
+def rrf(bm25_ranks: RankSeq, vector_ranks: RankSeq) -> list[tuple[str, float]]:
+    """Reciprocal Rank Fusion"""
+    scores = {}
+    for rank, (vacancy_id, _) in enumerate(bm25_ranks, start=1):
+        scores[vacancy_id] = scores.get(vacancy_id, 0.0) + 1 / (RRF_K + rank)
+    for rank, (vacancy_id, _) in enumerate(vector_ranks, start=1):
+        scores[vacancy_id] = scores.get(vacancy_id, 0.0) + 1 / (RRF_K + rank)
+
+    return sorted(scores.items(), key=lambda item: item[1], reverse=True)

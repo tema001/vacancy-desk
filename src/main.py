@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import FastAPI, HTTPException, Query, status
+from fastapi import Body, FastAPI, HTTPException, Query, status
 from fastapi.responses import FileResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import AfterValidator
@@ -33,7 +33,7 @@ from src.types import (
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    await resources.start()
+    await resources.start(start_llm=True)
 
     try:
         async with worker.open_async():
@@ -184,6 +184,13 @@ async def ai_lexicon_embed() -> DataDict:
     await worker.configure_task(LEXICON_EMBED).defer_async()
 
     return {'result': 'ok'}
+
+
+@app.post('/api/hybrid-search')
+async def process_hybrid_search(
+    query: Annotated[str, Body(min_length=3, embed=True)],
+) -> DataDict:
+    return await queries.get_search_response(query)
 
 
 DIST = Path(__file__).parent / 'dist'
