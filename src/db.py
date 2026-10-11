@@ -737,10 +737,7 @@ async def select_vacancies_for_bm25(
     conn: AsyncConnection, keywords: Iterable[str]
 ) -> Sequence[RowMapping]:
     match = func.regexp_matches(
-        Vacancy.title + ' ' + Vacancy.description,
-        TOKEN_RE,
-        'gi',
-        type_=ARRAY(sa.Text),
+        Vacancy.title + ' ' + Vacancy.description, TOKEN_RE, 'gi', type_=ARRAY(sa.Text)
     ).column_valued('m')
 
     tokenized = (

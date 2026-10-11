@@ -113,14 +113,14 @@ async def get_profile(profile_id: str) -> DataDict | None:
 
 
 async def get_search_response(query: str) -> DataDict:
-    _query = query.strip()
-    keywords = set(re.findall(db.TOKEN_RE, _query.lower()))
+    text = query.strip()
+    keywords = set(re.findall(db.TOKEN_RE, text.lower()))
 
     model = resources.config['llm']['embedding_model']
     resp = await resources.llm.embeddings.create(
         name='chunk-embed',
         model=model,
-        input=_query,
+        input=text,
         dimensions=1536,
     )
     embed_query = resp.data[0].embedding
