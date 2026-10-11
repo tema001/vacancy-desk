@@ -140,8 +140,8 @@ async def get_search_response(query: str) -> DataDict:
         cosine_rank = [(row['vacancy_id'], row['similarity']) for row in cosine_rows]
 
         rrf_rank = rrf(bm25_rank, cosine_rank)
-        print('rrf_rank', rrf_rank)
-        ranked_ids = [r[0] for r in rrf_rank[:30]]
+        # print('rrf_rank', rrf_rank)
+        ranked_ids = [r[0] for r in rrf_rank[:20]]
 
         vacancies = await db.select_vacancies_by_ids(conn, ranked_ids)
 

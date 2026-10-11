@@ -3,7 +3,7 @@ from enum import IntEnum
 from typing import Annotated, Any
 from uuid import UUID
 
-from pydantic import GetCoreSchemaHandler, GetPydanticSchema
+from pydantic import AfterValidator, GetCoreSchemaHandler, GetPydanticSchema
 from pydantic_core import CoreSchema, core_schema
 from sqlalchemy import (
     SmallInteger,
@@ -60,3 +60,6 @@ def uuid_schema(value: str) -> str:
     if parsed.version != 7:
         raise ValueError('UUID version 7 required')
     return str(parsed)
+
+
+type ItemUUID = Annotated[str, AfterValidator(uuid_schema)]
