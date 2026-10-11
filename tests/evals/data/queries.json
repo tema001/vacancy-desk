@@ -1,0 +1,38 @@
+{
+  "__comment": "272 rows total",
+  "from": "2026-08-01",
+  "to": "2026-10-10",
+  "cases": [
+    {
+      "query": "python react typescript",
+      "relevant_ids": [
+        "01a11623-b1ca-7670-9cf3-49f27983695e",
+        "01a08f89-bc04-71e3-b961-2723541bcb32",
+        "01a043df-8b74-7a6e-bfe8-a49f72dd1d02",
+        "01a0921c-f34b-7576-a7c7-a3b97cd35729",
+        "01a04909-e562-741c-9440-cecf826be749",
+        "01a08be6-7013-7e7b-b5f3-0138e305eab8",
+        "01a0cf92-641a-721c-9841-1c319f286769",
+        "01a043ef-1e0b-7092-a813-a256d765fc34"
+      ]
+    },
+    {
+      "query": "senior python fastapi postgresql",
+      "relevant_ids": [
+        "01a0a3f1-a2f3-7608-b2db-45a28220cde6",
+        "01a043ef-1e0f-79ed-81c9-5fcc3078ff1b",
+        "01a11623-b1ca-7dd5-8fb6-fed14aea341a",
+        "01a06347-2260-74e9-8a16-785cfa8de9e3",
+        "01a043ef-1e0b-706a-bd83-37acad2b1475",
+        "01a0f187-ee56-7eeb-9f5c-ad6180c689ba",
+        "01a043df-8b6d-7bc2-90b0-ec9144b27b30",
+        "01a043df-8b74-7878-a46b-eb2a879c6a18",
+        "01a043df-8b74-7b32-8e5e-65bb377eb942",
+        "01a11fad-1eac-7528-8ff6-92a6cb57ae94",
+        "01a043df-8b61-709a-b776-1f2d2edc97a2",
+        "01a043ef-1e0b-707f-951e-1c897320c652",
+        "01a043ef-1e0b-7092-a813-a256d765fc34"
+      ]
+    }
+  ]
+}
