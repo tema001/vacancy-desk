@@ -127,13 +127,15 @@ export function VacanciesPage() {
           <div className="page-actions">
             <button
               type="button"
-              className={
-                isScoreMode ? 'secondary-button is-active' : 'secondary-button'
-              }
+              className="matching-toggle"
               onClick={handleScore}
-              aria-pressed={isScoreMode}
+              role="switch"
+              aria-checked={isScoreMode}
             >
-              Score vacancies
+              <span>Matching</span>
+              <span className="matching-toggle-track" aria-hidden="true">
+                <span className="matching-toggle-thumb" />
+              </span>
             </button>
             <button
               type="button"

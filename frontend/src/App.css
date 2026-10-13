@@ -108,15 +108,49 @@ a:focus-visible {
   background: var(--surface);
 }
 
-.secondary-button.is-active {
-  border-color: var(--accent);
-  color: #ffffff;
+.matching-toggle {
+  display: inline-flex;
+  min-height: 35px;
+  gap: 9px;
+  align-items: center;
+  padding: 0 9px 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  color: var(--text);
+  background: var(--surface-raised);
+  font-size: 0.83rem;
+  font-weight: 650;
+}
+
+.matching-toggle:hover {
+  border-color: #454b45;
+  background: var(--surface-hover);
+}
+
+.matching-toggle-track {
+  width: 30px;
+  height: 17px;
+  padding: 2px;
+  border-radius: 999px;
+  background: #525852;
+  transition: background-color 150ms ease;
+}
+
+.matching-toggle-thumb {
+  display: block;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #ffffff;
+  transition: transform 150ms ease;
+}
+
+.matching-toggle[aria-checked='true'] .matching-toggle-track {
   background: var(--accent);
 }
 
-.secondary-button.is-active:hover:not(:disabled) {
-  border-color: var(--accent-hover);
-  background: var(--accent-hover);
+.matching-toggle[aria-checked='true'] .matching-toggle-thumb {
+  transform: translateX(13px);
 }
 
 .page-actions {

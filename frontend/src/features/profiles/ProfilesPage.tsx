@@ -116,7 +116,12 @@ export function ProfilesPage() {
     <div className="app-shell">
       <main>
         <section className="page-heading profiles-heading">
-          <h1>Profiles</h1>
+          <div className="page-title">
+            <h1>Profiles</h1>
+            <a className="page-title-link" href="/app">
+              Vacancies
+            </a>
+          </div>
           <div className="page-actions">
             <button
               type="button"
