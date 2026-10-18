@@ -819,6 +819,7 @@ async def select_profile(conn: AsyncConnection, profile_id: str) -> RowMapping |
         conn,
         stmt=(
             sa.select(
+                Profile.id,
                 Profile.name,
                 Profile.text,
                 Profile.job_families,

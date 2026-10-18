@@ -37,7 +37,7 @@ def _get_db_url(driver: str) -> URL:
 
 
 def _include_object(object_, name, type_, reflected, compare_to) -> bool:
-    if name and name.startswith('procrastinate_'):
+    if name and name.startswith(('procrastinate_', 'checkpoint_')):
         return False
     return True
 

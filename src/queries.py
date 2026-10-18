@@ -67,7 +67,7 @@ async def get_all_profiles() -> DataDict:
                 ),
                 'status': row['status'].name,
                 'is_selected': row['is_selected'],
-                'date_created': row['date_created'],
+                'date_created': row['date_created'].isoformat(),
             }
             for row in rows
         ]
