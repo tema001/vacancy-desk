@@ -1,6 +1,9 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Body, Query
+from langchain_core.messages import HumanMessage
+from langchain_core.runnables import RunnableConfig
+from langgraph.types import Command
 
 from src.jobs import (
     ENQUEUE_VACANCIES,
@@ -10,6 +13,7 @@ from src.jobs import (
     PROCESS_FEED,
 )
 from src.services.worker import app as worker
+from src.shared.resources import resources
 from src.types import DataDict
 
 router = APIRouter(tags=['internal'])
@@ -55,3 +59,25 @@ async def ai_lexicon_embed() -> DataDict:
     await worker.configure_task(LEXICON_EMBED).defer_async()
 
     return {'result': 'ok'}
+
+
+@router.post('/api/agent')
+async def ai_agent(
+    query: Annotated[str, Body(min_length=1, embed=True)],
+) -> DataDict:
+    config: RunnableConfig = {'configurable': {'thread_id': 'helllooo'}}
+
+    snapshot = await resources.agent.aget_state(config)
+    if snapshot.interrupts:
+        result = await resources.agent.ainvoke(Command(resume=query), config=config)
+    else:
+        result = await resources.agent.ainvoke(
+            {'messages': [HumanMessage(query)]},
+            config=config,
+        )
+
+    interrupts = result.get('__interrupt__')
+    if interrupts:
+        return {'resp': interrupts[0].value}
+
+    return {'resp': result['messages'][-1].content}

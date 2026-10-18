@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import asyncio
 from collections.abc import Mapping
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx2
 from envyaml import EnvYAML
@@ -11,6 +13,12 @@ from sqlalchemy.engine.url import URL, make_url
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.ext.asyncio.engine import create_async_engine
 
+if TYPE_CHECKING:
+    from langgraph.graph.state import CompiledStateGraph
+    from psycopg_pool import AsyncConnectionPool
+
+    AgentGraph = CompiledStateGraph[Any, Any, Any, Any]
+
 
 class Resources:
     def __init__(self) -> None:
@@ -19,6 +27,8 @@ class Resources:
         self._config: Mapping[str, Any] | None = None
         self._llm: AsyncOpenAI | None = None
         self._langfuse: Langfuse | None = None
+        self._pool: AsyncConnectionPool[Any] | None = None
+        self._agent: AgentGraph | None = None
 
     def set_client(self, client: httpx2.AsyncClient) -> None:
         self._client = client
@@ -65,6 +75,12 @@ class Resources:
             raise RuntimeError('langfuse client is not started')
         return self._langfuse
 
+    @property
+    def agent(self) -> AgentGraph:
+        if self._agent is None:
+            raise RuntimeError('agent is not started')
+        return self._agent
+
     def load_config(self) -> None:
         if self._config is None:
             self.set_config(EnvYAML('config/config.yaml'))
@@ -74,7 +90,12 @@ class Resources:
 
         return self.langfuse.get_prompt(name, type='chat', label=label)
 
-    async def start(self, start_llm: bool = False, warmup_llm: bool = False) -> None:
+    async def start(
+        self,
+        start_llm: bool = False,
+        warmup_llm: bool = False,
+        init_agent: bool = False,
+    ) -> None:
         self.load_config()
 
         if self._client is None:
@@ -89,9 +110,8 @@ class Resources:
             )
             self.set_client(client)
 
+        db = self.config['db']
         if self._engine is None:
-            db = self.config['db']
-
             engine = create_async_engine(
                 url=postgres_url(db['dsn'], driver='asyncpg'),
                 pool_size=db['pool_size'],
@@ -118,6 +138,26 @@ class Resources:
                     for name in names:
                         tg.create_task(asyncio.to_thread(self.get_prompt, name))
 
+        if init_agent:
+            from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+            from psycopg.rows import dict_row
+            from psycopg_pool import AsyncConnectionPool
+
+            from src.ai_agent.workflow import builder
+
+            pool = AsyncConnectionPool(
+                conninfo=db['dsn'],
+                kwargs={
+                    'autocommit': True,
+                    'prepare_threshold': 0,
+                    'row_factory': dict_row,
+                },
+                open=False,
+            )
+            await pool.open()
+            self._pool = pool
+            self._agent = builder.compile(checkpointer=AsyncPostgresSaver(pool))
+
     async def stop(self) -> None:
         if self._client:
             await self._client.aclose()
@@ -134,6 +174,11 @@ class Resources:
         if self._langfuse:
             await asyncio.to_thread(self._langfuse.shutdown)
             self._langfuse = None
+
+        if self._pool:
+            await self._pool.close()
+            self._pool = None
+            self._agent = None
 
 
 def postgres_url(dsn: str, driver: str | None = None) -> URL:

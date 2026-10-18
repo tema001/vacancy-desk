@@ -15,7 +15,7 @@ from src.shared.resources import resources
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    await resources.start(start_llm=True)
+    await resources.start(start_llm=True, init_agent=True)
 
     try:
         async with worker.open_async():
