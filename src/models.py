@@ -190,6 +190,27 @@ class VacancySkill(Base):
     importance: Mapped[float]
 
 
+class Chat(Base):
+    __tablename__ = 'chats'
+
+    id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False),
+        primary_key=True,
+        server_default=text('uuidv7()'),
+    )
+    awaiting_input: Mapped[bool] = mapped_column(default=False)
+
+    date_created: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=func.now()
+    )
+    date_updated: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=func.now()
+    )
+    date_deleted: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), default=None
+    )
+
+
 class Profile(Base):
     __tablename__ = 'profiles'
 

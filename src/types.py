@@ -41,6 +41,10 @@ class ParamsSchema(BaseModel):
         return (self.page - 1) * self.limit
 
 
+class ChatMessageSchema(BaseModel):
+    text: Annotated[str, StringConstraints(min_length=1, max_length=1000)]
+
+
 class ProfileCreateSchema(BaseModel):
     text: Annotated[str, StringConstraints(min_length=10, max_length=5000)]
     name: Annotated[str, StringConstraints(min_length=5, max_length=100)] | None = None
