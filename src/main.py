@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
+from src.routes.chats import router as agent_router
 from src.routes.internal import router as internal_router
 from src.routes.profiles import router as profiles_router
 from src.routes.vacancies import router as vacancies_router
@@ -29,6 +30,7 @@ app = FastAPI(title='Vacancy Desk', lifespan=lifespan)
 app.include_router(profiles_router)
 app.include_router(vacancies_router)
 app.include_router(internal_router)
+app.include_router(agent_router)
 
 DIST = Path(__file__).parent / 'dist'
 

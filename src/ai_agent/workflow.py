@@ -74,9 +74,9 @@ async def prepare_update_profile(profile_id: str, patch: ProfilePatch) -> DataDi
 
 async def agent(state: MessagesState) -> DataDict:
     model = ChatOpenAI(
-        model='gpt-5.4-nano',
-        temperature=0,
-        reasoning_effort='none',
+        model='gpt-6-luna',
+        reasoning_effort='low',
+        use_responses_api=True,
         async_client=resources.llm.chat.completions,
         root_async_client=resources.llm,
     ).bind_tools(tools)
@@ -165,10 +165,10 @@ async def apply_action(state: State) -> DataDict:
 
 async def final_response(state: State) -> DataDict:
     model = ChatOpenAI(
-        model='gpt-5.4-nano',
-        temperature=0,
+        model='gpt-6-luna',
         reasoning_effort='none',
-        async_client=resources.llm.chat.completions,
+        use_responses_api=True,
+        async_client=resources.llm.responses,
         root_async_client=resources.llm,
     )
     response = await model.ainvoke([SystemMessage(prompts.APPROVAL), *state['messages']])
