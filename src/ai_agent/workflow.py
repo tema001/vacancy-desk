@@ -66,7 +66,6 @@ async def prepare_update_profile(profile_id: str, patch: ProfilePatch) -> DataDi
     changes = patch.model_dump(exclude_none=True)
     if not changes:
         return {'error': 'empty_patch'}
-    print('changes', changes)
 
     return {
         'action_type': ChatActionType.update_profile.name,
@@ -123,7 +122,6 @@ async def capture_action(state: State, config: RunnableConfig) -> DataDict:
                 'payload': data['patch'],
             },
         )
-        print('save action', data['patch'])
 
     return {
         'messages': [AIMessage('Are you sure you want to apply changes?')],
