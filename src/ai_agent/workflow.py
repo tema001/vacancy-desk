@@ -2,6 +2,8 @@ import json
 from typing import Literal, NotRequired
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 from langgraph.graph import END, START, MessagesState, StateGraph
@@ -11,10 +13,10 @@ from pydantic import BaseModel, Field
 
 import src.db as db
 import src.queries as queries
+from src.ai_agent import db as agent_db
 from src.ai_agent import prompts
-from src.enums import ProfileStatus
+from src.enums import ChatActionType, ProfileStatus
 from src.shared.resources import resources
-from src.shared.utils import dt_now
 from src.types import DataDict
 
 
@@ -66,7 +68,7 @@ async def prepare_update_profile(profile_id: str, patch: ProfilePatch) -> DataDi
         return {'error': 'empty_patch'}
 
     return {
-        'action_type': 'update_profile',
+        'action_type': ChatActionType.update_profile.name,
         'item_id': profile_id,
         'patch': changes,
     }
@@ -102,21 +104,28 @@ def route_after_tools(state: State) -> Literal['agent', 'capture_action']:
     return 'agent'
 
 
-def capture_action(state: State) -> DataDict:
+async def capture_action(state: State, config: RunnableConfig) -> DataDict:
     last_msg = state['messages'][-1]
     assert isinstance(last_msg, ToolMessage)
     assert isinstance(last_msg.content, str)
+    data = json.loads(last_msg.content)
 
-    payload = json.loads(last_msg.content)
-    payload['date_created'] = dt_now()
-    db_example.append(payload)
+    chat_id = config['configurable']['thread_id']
+
+    async with resources.engine.begin() as conn:
+        action_id = await agent_db.insert_chat_action(
+            conn,
+            data={
+                'chat_id': chat_id,
+                'action_type': ChatActionType[data['action_type']],
+                'item_id': data['item_id'],
+                'payload': data['patch'],
+            },
+        )
 
     return {
         'messages': [AIMessage('Are you sure you want to apply changes?')],
-        'action_info': {
-            'action_type': payload['action_type'],
-            'item_id': payload['item_id'],
-        },
+        'action_info': {'id': action_id},
     }
 
 
@@ -129,9 +138,9 @@ def human_approval(state: State) -> DataDict:
 
 async def interpret_approval(state: State) -> DataDict:
     model = ChatOpenAI(
-        model='gpt-5.4-nano',
-        temperature=0,
+        model='gpt-6-luna',
         reasoning_effort='none',
+        use_responses_api=True,
         async_client=resources.llm.chat.completions,
         root_async_client=resources.llm,
     ).with_structured_output(ApprovalAnswer)
@@ -153,14 +162,24 @@ def route_approval_answer(
     return 'cancel_action'
 
 
-async def apply_action(state: State) -> DataDict:
-    profile_id = state['action_info']['item_id']
-    aaa = db_example[-1]
+async def apply_action(state: State, config: RunnableConfig) -> DataDict:
+    action_id = state['action_info']['id']
+    chat_id = config['configurable']['thread_id']
 
     async with resources.engine.begin() as conn:
-        await db.update_profile(conn, profile_id, data=aaa['patch'])
+        row = await agent_db.select_chat_action(conn, action_id)
+        assert row
+        assert row['chat_id'] == chat_id
 
-    return {'action_info': None, 'decision': None}
+        await db.update_profile(conn, row['item_id'], data=row['payload'])
+
+    return {
+        'action_info': {
+            'action_type': row['action_type'].name,
+            'payload': json.dumps(row['payload'], ensure_ascii=False),
+        },
+        'decision': None,
+    }
 
 
 async def final_response(state: State) -> DataDict:
@@ -168,14 +187,23 @@ async def final_response(state: State) -> DataDict:
         model='gpt-6-luna',
         reasoning_effort='none',
         use_responses_api=True,
-        async_client=resources.llm.responses,
+        async_client=resources.llm.chat.completions,
         root_async_client=resources.llm,
     )
-    response = await model.ainvoke([SystemMessage(prompts.APPROVAL), *state['messages']])
-    return {'messages': [response]}
+    messages = ChatPromptTemplate.from_messages(
+        [('system', prompts.APPROVAL), MessagesPlaceholder('history')]
+    )
+    chain = messages | model
+
+    response = await chain.ainvoke(
+        {
+            **state['action_info'],
+            'history': state['messages'],
+        }
+    )
+    return {'messages': [response], 'action_info': None}
 
 
-db_example = []
 tools = [list_profiles, get_profile, prepare_update_profile]
 
 builder = StateGraph(State)

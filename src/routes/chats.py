@@ -11,7 +11,7 @@ async def get_active_chat() -> DataDict:
     return await utils.get_active_chat()
 
 
-@router.post('/api/chats', status_code=status.HTTP_201_CREATED)
+@router.post('/api/chats/new', status_code=status.HTTP_201_CREATED)
 async def create_chat() -> DataDict:
     return await utils.create_new_chat()
 

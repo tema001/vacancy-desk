@@ -14,10 +14,11 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import ARRAY
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 from src.enums import (
+    ChatActionType,
     EnglishLevel,
     JobFamily,
     ProfileStatus,
@@ -208,6 +209,24 @@ class Chat(Base):
     )
     date_deleted: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), default=None
+    )
+
+
+class ChatActions(Base):
+    __tablename__ = 'chat_actions'
+
+    id: Mapped[str] = mapped_column(
+        Uuid(as_uuid=False),
+        primary_key=True,
+        server_default=text('uuidv7()'),
+    )
+    chat_id: Mapped[str] = mapped_column(ForeignKey('chats.id'))
+    action_type: Mapped[ChatActionType] = mapped_column(SmallIntEnum(ChatActionType))
+    item_id: Mapped[str]
+    payload: Mapped[dict] = mapped_column(JSONB)
+
+    date_created: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=func.now()
     )
 
 
