@@ -4,7 +4,7 @@ from sqlalchemy.engine.row import RowMapping
 from sqlalchemy.ext.asyncio.engine import AsyncConnection
 
 from src.db import select_all, select_one
-from src.models import Chat
+from src.models import Chat, ChatActions
 from src.types import DataDict
 
 CHAT_COLUMNS = (
@@ -77,3 +77,25 @@ async def select_chat_awaiting_input(conn: AsyncConnection, chat_id: str) -> boo
 
 async def update_chat(conn: AsyncConnection, chat_id: str, data: DataDict) -> None:
     await conn.execute(sa.update(Chat).values(data).where(Chat.id == chat_id))
+
+
+async def insert_chat_action(conn: AsyncConnection, data: DataDict) -> str:
+    row = await select_one(
+        conn, insert(ChatActions).values(data).returning(ChatActions.id)
+    )
+    assert row
+    return row['id']
+
+
+async def select_chat_action(conn: AsyncConnection, action_id: str) -> RowMapping | None:
+    return await select_one(
+        conn,
+        stmt=(
+            sa.select(
+                ChatActions.chat_id,
+                ChatActions.item_id,
+                ChatActions.payload,
+                ChatActions.action_type,
+            ).where(ChatActions.id == action_id)
+        ),
+    )

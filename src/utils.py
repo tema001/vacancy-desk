@@ -365,17 +365,16 @@ async def process_vacancy_extract(vacancy_id: str) -> None:
     )
 
     with propagate_attributes(prompt=prompt):
-        resp = await resources.llm.chat.completions.create(
+        resp = await resources.llm.responses.create(
             name=prompt.name,
-            model=prompt.config['model'],
-            messages=compiled_prompt,
-            temperature=0,
-            response_format={'type': 'json_object'},
-            reasoning_effort='none',
+            model='gpt-6-luna',
+            input=compiled_prompt,
+            text={'format': {'type': 'json_object'}},
+            reasoning={'effort': 'low'},
             metadata={'vacancy_id': vacancy_id, 'category': row['category']},
         )
 
-    raw_resp = resp.choices[0].message.content
+    raw_resp = resp.output_text
     if not raw_resp:
         raise RuntimeError('Vacancy extract. LLM response is empty!')
 

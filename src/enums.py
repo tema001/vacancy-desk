@@ -66,3 +66,7 @@ class ProfileStatus(IntEnum):
     pending = 1
     ready = 2
     failed = 3
+
+
+class ChatActionType(IntEnum):
+    update_profile = 1
