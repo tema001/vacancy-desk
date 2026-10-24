@@ -23,7 +23,7 @@ from src.types import FullParsedPage, ParsedPage, ParseJob
 _UNSET: Any = object()
 
 
-def page_from_vacancy(vacancy: Mapping[str, Any]) -> FullParsedPage:
+def page_from_vacancy(vacancy: Mapping[Any, Any]) -> FullParsedPage:
     return FullParsedPage(
         company=vacancy['company'],
         title=vacancy['title'],

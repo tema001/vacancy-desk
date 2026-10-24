@@ -4,7 +4,7 @@ import src.db as db
 from src.enums import JobFamily, ProfileStatus
 from src.scoring import SIMILARITY_THRESHOLD, rank_bm25, rank_vacancy_matches, rrf
 from src.shared.resources import resources
-from src.types import DataDict, ParamsSchema, ScoringProfile
+from src.types import DataDict, HybridSearchSchema, ParamsSchema, ScoringProfile
 
 
 async def get_vacancies(params: ParamsSchema) -> DataDict:
@@ -112,8 +112,8 @@ async def get_profile(profile_id: str) -> DataDict | None:
     }
 
 
-async def get_search_response(query: str) -> DataDict:
-    text = query.strip()
+async def get_search_response(params: HybridSearchSchema) -> DataDict:
+    text = params.query.strip()
     keywords = set(re.findall(db.TOKEN_RE, text.lower()))
 
     model = resources.config['llm']['embedding_model']
@@ -126,7 +126,7 @@ async def get_search_response(query: str) -> DataDict:
     embed_query = resp.data[0].embedding
 
     async with resources.engine.connect() as conn:
-        bm_rows = await db.select_vacancies_for_bm25(conn, keywords)
+        bm_rows = await db.select_vacancies_for_bm25(conn, keywords, params)
         if bm_rows:
             f = bm_rows[0]
             bm25_rank = rank_bm25(
@@ -136,12 +136,12 @@ async def get_search_response(query: str) -> DataDict:
         else:
             bm25_rank = []
 
-        cosine_rows = await db.select_vacancy_similarities(conn, embed_query)
+        cosine_rows = await db.select_vacancy_similarities(conn, embed_query, params)
         cosine_rank = [(row['vacancy_id'], row['similarity']) for row in cosine_rows]
 
         rrf_rank = rrf(bm25_rank, cosine_rank)
         # print('rrf_rank', rrf_rank)
-        ranked_ids = [r[0] for r in rrf_rank[:20]]
+        ranked_ids = [r[0] for r in rrf_rank[: params.top_k]]
 
         vacancies = await db.select_vacancies_by_ids(conn, ranked_ids)
 
