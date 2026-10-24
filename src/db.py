@@ -1,4 +1,4 @@
-from collections.abc import Generator, Iterable, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from datetime import datetime, timedelta
 
 import sqlalchemy as sa
@@ -734,7 +734,7 @@ async def update_vacancy_chunk_embed(conn: AsyncConnection, data: list[DataDict]
     return saved
 
 
-def _build_params(params: HybridSearchSchema) -> Generator:
+def _build_params(params: HybridSearchSchema) -> Iterator[sa.ColumnElement[bool]]:
     if params.exp:
         yield Vacancy.experience <= params.exp * 12.0
 

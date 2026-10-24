@@ -214,7 +214,7 @@ class ParseJob:
     desc_hash: bytes | None
 
     @classmethod
-    def from_db(cls, row: Mapping[str, Any]) -> Self:
+    def from_db(cls, row: Mapping[Any, Any]) -> Self:
         return cls(
             vacancy_id=row['id'],
             url=row['url'],
@@ -233,7 +233,7 @@ class ScoringProfile:
     seniority: Seniority | None
 
     @classmethod
-    def from_db(cls, row: Mapping[str, Any]) -> Self:
+    def from_db(cls, row: Mapping[Any, Any]) -> Self:
         return cls(
             id=row['id'],
             name=row['name'],

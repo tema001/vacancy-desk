@@ -450,7 +450,7 @@ async def process_lexicon_expanding() -> None:
             await lexicon_embed.defer_async()
 
 
-async def _write_vacancy_chunks(conn: AsyncConnection, row: Mapping[str, Any]) -> bool:
+async def _write_vacancy_chunks(conn: AsyncConnection, row: Mapping[Any, Any]) -> bool:
     vacancy_id = row['id']
     # do not quit early for empty list, need to delete stored chunks
     chunks = split_vacancy_text(row['title'], row['description'])

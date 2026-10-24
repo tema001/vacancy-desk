@@ -68,7 +68,7 @@ def rank_vacancy_matches(
 # TODO: Add gin index. Compare with pg_search
 def rank_bm25(
     keywords: Collection[str],
-    documents: Sequence[Mapping[str, Any]],
+    documents: Sequence[Mapping[Any, Any]],
     N: int,
     avg_dl: float,
 ) -> list[tuple[str, float]]:
