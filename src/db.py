@@ -1,4 +1,4 @@
-from collections.abc import Iterable, Sequence
+from collections.abc import Generator, Iterable, Sequence
 from datetime import datetime, timedelta
 
 import sqlalchemy as sa
@@ -19,7 +19,7 @@ from src.models import (
     VacancySkill,
     VacancyStatus,
 )
-from src.types import DataDict, ParamsSchema, ScoringProfile
+from src.types import DataDict, HybridSearchSchema, ParamsSchema, ScoringProfile
 
 TOKEN_RE = r'[a-z0-9]+(?:[+#]+|\.[a-z0-9]+|-[a-z0-9]+)*'  # noqa: S105
 
@@ -445,6 +445,7 @@ async def select_vacancies_by_ids(
         Vacancy.salary_max,
         Vacancy.salary_level,
         Vacancy.experience,
+        Vacancy.english_level,
         Vacancy.status,
     ).where(Vacancy.id.in_(ids))
 
@@ -733,8 +734,23 @@ async def update_vacancy_chunk_embed(conn: AsyncConnection, data: list[DataDict]
     return saved
 
 
+def _build_params(params: HybridSearchSchema) -> Generator:
+    if params.exp:
+        yield Vacancy.experience <= params.exp * 12.0
+
+    if params.salary_min:
+        yield (
+            sa.or_(
+                Vacancy.salary_min >= params.salary_min, Vacancy.salary_level.isnot(None)
+            )
+        )
+
+    if params.eng_lvl:
+        yield Vacancy.english_level <= params.eng_lvl
+
+
 async def select_vacancies_for_bm25(
-    conn: AsyncConnection, keywords: Iterable[str]
+    conn: AsyncConnection, keywords: Iterable[str], params: HybridSearchSchema
 ) -> Sequence[RowMapping]:
     match = func.regexp_matches(
         Vacancy.title + ' ' + Vacancy.description, TOKEN_RE, 'gi', type_=ARRAY(sa.Text)
@@ -748,7 +764,7 @@ async def select_vacancies_for_bm25(
                 type_=ARRAY(sa.Text),
             ).label('tokens'),
         )
-        .where(Vacancy.status == VacancyStatus.active)
+        .where(Vacancy.status == VacancyStatus.active, *_build_params(params))
         .cte('tokenized')
     )
     all_info = sa.select(
@@ -766,13 +782,13 @@ async def select_vacancies_for_bm25(
 
 
 async def select_vacancy_similarities(
-    conn: AsyncConnection, embed_query: Iterable[float]
+    conn: AsyncConnection, embed_query: Iterable[float], params: HybridSearchSchema
 ) -> Sequence[RowMapping]:
     similarity = 1 - VacancyChunk.embedding.cosine_distance(embed_query)
     cos_sim = (
         sa.select(VacancyChunk.vacancy_id, similarity.label('similarity'))
         .join(Vacancy, Vacancy.id == VacancyChunk.vacancy_id)
-        .where(Vacancy.status == VacancyStatus.active)
+        .where(Vacancy.status == VacancyStatus.active, *_build_params(params))
         .cte('cos_sim')
     )
 
@@ -785,7 +801,7 @@ async def select_vacancy_similarities(
             .where(cos_sim.c.similarity > 0.3)
             .group_by(cos_sim.c.vacancy_id)
             .order_by(max_similarity.desc())
-            .limit(50)
+            .limit(params.top_k * 2)
         ),
     )
 
@@ -886,6 +902,14 @@ async def insert_new_profile(conn: AsyncConnection, data: DataDict) -> str:
 
 
 async def update_profile(conn: AsyncConnection, profile_id: str, data: DataDict) -> None:
+    if data.get('is_selected'):
+        stmt = (
+            sa.update(Profile)
+            .values(is_selected=False)
+            .where(Profile.is_selected.is_(True))
+        )
+        await conn.execute(stmt)
+
     stmt = sa.update(Profile).values(data).where(Profile.id == profile_id)
     await conn.execute(stmt)
 

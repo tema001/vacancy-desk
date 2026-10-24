@@ -367,7 +367,7 @@ async def process_vacancy_extract(vacancy_id: str) -> None:
     with propagate_attributes(prompt=prompt):
         resp = await resources.llm.responses.create(
             name=prompt.name,
-            model='gpt-6-luna',
+            model=prompt.config['model'],
             input=compiled_prompt,
             text={'format': {'type': 'json_object'}},
             reasoning={'effort': 'low'},
@@ -413,13 +413,12 @@ async def process_lexicon_expanding() -> None:
 
     compiled_prompt = prompt.compile(skill_names=rows[:limit])
     with propagate_attributes(prompt=prompt):
-        resp = await resources.llm.chat.completions.create(
+        resp = await resources.llm.responses.create(
             name=prompt.name,
-            messages=compiled_prompt,
             model=prompt.config['model'],
-            temperature=prompt.config['temperature'],
-            response_format={'type': 'json_object'},
-            reasoning_effort='low',
+            input=compiled_prompt,
+            text={'format': {'type': 'json_object'}},
+            reasoning={'effort': 'low'},
         )
 
     raw_resp = resp.choices[0].message.content
@@ -676,13 +675,12 @@ async def process_new_profile(profile_id: str) -> None:
     compiled_prompt = prompt.compile(text=row['text'])
 
     with propagate_attributes(prompt=prompt):
-        resp = await resources.llm.chat.completions.create(
+        resp = await resources.llm.responses.create(
             name=prompt.name,
             model=prompt.config['model'],
-            messages=compiled_prompt,
-            temperature=0,
-            response_format={'type': 'json_object'},
-            reasoning_effort='none',
+            input=compiled_prompt,
+            text={'format': {'type': 'json_object'}},
+            reasoning={'effort': 'low'},
             metadata={'profile_id': profile_id},
         )
 

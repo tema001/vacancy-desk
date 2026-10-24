@@ -9,9 +9,11 @@ wheels/
 .venv
 
 # other
+.cursor/
+.idea/
+.other
 dist/
 node_modules/
-.cursor/
+
 local.env
-.idea/
 jobs.dump

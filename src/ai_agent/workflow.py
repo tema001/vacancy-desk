@@ -17,7 +17,8 @@ from src.ai_agent import db as agent_db
 from src.ai_agent import prompts
 from src.enums import ChatActionType, ProfileStatus
 from src.shared.resources import resources
-from src.types import DataDict
+from src.shared.utils import enum_name
+from src.types import AgentHybridSearch, DataDict
 
 
 class State(MessagesState):
@@ -35,10 +36,35 @@ class ApprovalAnswer(BaseModel):
 
 
 @tool
+def get_feature_instructions(
+    feature: Literal['profiles', 'vacancy_search'],
+) -> str:
+    """
+    Load the operating prompt for one product feature and follow it.
+
+    Call this only when need an additional context to make answer or decision.
+    profiles: general description, how to list, read, and propose a profile update.
+    vacancy_search: general description, how to fill args and how to read its rows.
+    """
+    match feature:
+        case 'profiles':
+            return resources.get_prompt('profiles-sys-prompt').prompt
+        case 'vacancy_search':
+            return resources.get_prompt('vacancy-search-sys-prompt').prompt
+        case _:
+            return 'Unknown feature'
+
+
+@tool
 async def get_profile(profile_id: str) -> DataDict:
     """Get detailed profile information including skills and experience."""
     profile = await queries.get_profile(profile_id)
-    return profile or {'error': 'Profile not found'}
+    if not profile:
+        return {'error': 'profile_not_found'}
+
+    profile['english_level'] = enum_name(profile['english_level'])
+
+    return profile
 
 
 @tool
@@ -72,6 +98,21 @@ async def prepare_update_profile(profile_id: str, patch: ProfilePatch) -> DataDi
         'item_id': profile_id,
         'patch': changes,
     }
+
+
+@tool
+async def search_vacancies(params: AgentHybridSearch) -> DataDict:
+    """
+    Search active vacancies by meaning, keywords and optional filters.
+    Rows are ordered by relevance. An empty rows list means nothing matched.
+    """
+    resp = await queries.get_search_response(params)
+    for row in resp['rows']:
+        row['source'] = enum_name(row['source'])
+        row['english_level'] = enum_name(row['english_level'])
+        row['status'] = enum_name(row['status'])
+
+    return resp
 
 
 async def agent(state: MessagesState) -> DataDict:
@@ -204,7 +245,13 @@ async def final_response(state: State) -> DataDict:
     return {'messages': [response], 'action_info': None}
 
 
-tools = [list_profiles, get_profile, prepare_update_profile]
+tools = [
+    get_feature_instructions,
+    list_profiles,
+    get_profile,
+    prepare_update_profile,
+    search_vacancies,
+]
 
 builder = StateGraph(State)
 builder.add_node('agent', agent)

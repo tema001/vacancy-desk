@@ -41,6 +41,20 @@ class ParamsSchema(BaseModel):
         return (self.page - 1) * self.limit
 
 
+class HybridSearchSchema(BaseModel):
+    query: str = Field(default=20, gt=0, le=20)
+
+    exp: int | None = Field(default=None, gt=0, lt=20)  # years
+    salary_min: int | None = Field(default=None, gt=0, lt=100_000)
+    eng_lvl: EnglishLevel | None = Field(default=None)
+
+    top_k: int = Field(default=20, gt=0, le=20)
+
+
+class AgentHybridSearch(HybridSearchSchema):
+    top_k: int = Field(default=3, gt=0, le=10)
+
+
 class ChatMessageSchema(BaseModel):
     text: Annotated[str, StringConstraints(min_length=1, max_length=1000)]
 

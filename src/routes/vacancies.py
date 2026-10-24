@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Body, HTTPException, status
 
 import src.queries as queries
-from src.types import DataDict, ParamsSchema
+from src.types import DataDict, HybridSearchSchema, ParamsSchema
 
 router = APIRouter(tags=['vacancies'])
 
@@ -29,4 +29,4 @@ async def get_scored_vacancies() -> DataDict:
 async def process_hybrid_search(
     query: Annotated[str, Body(min_length=3, embed=True)],
 ) -> DataDict:
-    return await queries.get_search_response(query)
+    return await queries.get_search_response(HybridSearchSchema(query=query))
