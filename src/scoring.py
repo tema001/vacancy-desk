@@ -75,11 +75,11 @@ def rank_bm25(
     """
     Returns ranked by score tuple(vacancy_id, bm25_score)
     """
-    kw_doc_c = Counter()
+    kw_doc_c: Counter[str] = Counter()
     kw_reps = []
 
     for doc in documents:
-        counter = Counter()
+        counter: Counter[str] = Counter()
         for term in doc['tokens']:
             if term in keywords:
                 counter[term] += 1
@@ -93,9 +93,9 @@ def rank_bm25(
     k = 1.2
     b = 0.75
 
-    scores = []
+    scores: list[tuple[str, float]] = []
     for i, doc in enumerate(documents):
-        score = 0
+        score = 0.0
         doc_len = len(doc['tokens'])
         for t in keywords:
             idf = math.log((N - kw_doc_c[t] + 0.5) / (kw_doc_c[t] + 0.5) + 1)
@@ -107,7 +107,7 @@ def rank_bm25(
 
             score += idf * m
 
-        scores.append((doc['id'], score))
+        scores.append((str(doc['id']), score))
 
     scores.sort(key=lambda item: item[1], reverse=True)
     return scores
@@ -115,7 +115,7 @@ def rank_bm25(
 
 def rrf(bm25_ranks: RankSeq, vector_ranks: RankSeq) -> list[tuple[str, float]]:
     """Reciprocal Rank Fusion"""
-    scores = {}
+    scores: dict[str, float] = {}
     for rank, (vacancy_id, _) in enumerate(bm25_ranks, start=1):
         scores[vacancy_id] = scores.get(vacancy_id, 0.0) + 1 / (RRF_K + rank)
     for rank, (vacancy_id, _) in enumerate(vector_ranks, start=1):

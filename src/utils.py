@@ -4,11 +4,13 @@ import re
 from collections.abc import Mapping
 from contextlib import suppress
 from datetime import date
-from typing import Any
+from typing import Any, cast
 
 import feedparser
 from httpx2 import HTTPStatusError
 from langfuse import propagate_attributes
+from openai.types.responses import ResponseInputParam, ResponseTextConfigParam
+from openai.types.shared_params.reasoning import Reasoning
 from parsel import Selector
 from procrastinate.exceptions import AlreadyEnqueued
 from sqlalchemy.ext.asyncio.engine import AsyncConnection
@@ -34,6 +36,17 @@ from src.types import (
 )
 
 CEFR_RE = re.compile(r'\b([ABC][12])\b', re.IGNORECASE)
+
+JSON_TEXT: ResponseTextConfigParam = {'format': {'type': 'json_object'}}
+LOW_REASONING: Reasoning = {'effort': 'low'}
+
+
+def openai_input(compiled: object) -> str | ResponseInputParam:
+    if isinstance(compiled, str):
+        return compiled
+    if isinstance(compiled, list):
+        return cast(ResponseInputParam, compiled)
+    raise TypeError(f'unexpected compiled prompt: {type(compiled).__name__}')
 
 
 async def process_feed(category: str) -> None:
@@ -276,7 +289,9 @@ async def _sync_skills_into_lexicon[T: SkillExtract](
         )
         print('Matched lexicon', rows)
 
-        matched = {row['s_norm']: row['skill_name'] for row in rows}
+        matched: dict[str, str] = {
+            str(row['s_norm']): str(row['skill_name']) for row in rows
+        }
         lexicon_data = [
             {'skill_name': skill.canonical, 'kind': skill.kind}
             for skill in new_skills
@@ -286,8 +301,9 @@ async def _sync_skills_into_lexicon[T: SkillExtract](
             await db.insert_skill_lexicon(conn, lexicon_data)
 
         for skill in new_skills:
-            if name := matched.get(skill.normalized):
-                skill.canonical = name
+            canonical = matched.get(skill.normalized)
+            if canonical is not None:
+                skill.canonical = canonical
 
     uq_skills: dict[str, T] = {}
     for skill in skills:
@@ -345,6 +361,8 @@ async def process_vacancy_extract(vacancy_id: str) -> None:
                 return
 
             raw_resp = await db.select_vacancy_extract_response(conn, vacancy_id)
+            assert raw_resp
+
             data = VacancyLLMExtract.model_validate_json(raw_resp)
             if data.skills:
                 await _add_vacancy_skill_and_lexicon(conn, vacancy_id, data.skills)
@@ -364,14 +382,16 @@ async def process_vacancy_extract(vacancy_id: str) -> None:
         description=row['description'],
     )
 
-    with propagate_attributes(prompt=prompt):
+    with propagate_attributes(prompt=prompt, trace_name=prompt.name):
         resp = await resources.llm.responses.create(
-            name=prompt.name,
             model=prompt.config['model'],
-            input=compiled_prompt,
-            text={'format': {'type': 'json_object'}},
-            reasoning={'effort': 'low'},
-            metadata={'vacancy_id': vacancy_id, 'category': row['category']},
+            input=openai_input(compiled_prompt),
+            text=JSON_TEXT,
+            reasoning=LOW_REASONING,
+            metadata={
+                'vacancy_id': vacancy_id,
+                'category': str(row['category']),
+            },
         )
 
     raw_resp = resp.output_text
@@ -412,16 +432,15 @@ async def process_lexicon_expanding() -> None:
         return
 
     compiled_prompt = prompt.compile(skill_names=rows[:limit])
-    with propagate_attributes(prompt=prompt):
+    with propagate_attributes(prompt=prompt, trace_name=prompt.name):
         resp = await resources.llm.responses.create(
-            name=prompt.name,
             model=prompt.config['model'],
-            input=compiled_prompt,
-            text={'format': {'type': 'json_object'}},
-            reasoning={'effort': 'low'},
+            input=openai_input(compiled_prompt),
+            text=JSON_TEXT,
+            reasoning=LOW_REASONING,
         )
 
-    raw_resp = resp.choices[0].message.content
+    raw_resp = resp.output_text
     if not raw_resp:
         raise RuntimeError('Lexicon expanding. LLM response is empty!')
 
@@ -539,12 +558,12 @@ async def process_chunk_embedding() -> None:
         return
 
     batch = rows[:limit]
-    resp = await resources.llm.embeddings.create(
-        name='chunk-embed',
-        model=model,
-        input=[row['content'] for row in batch],
-        dimensions=1536,
-    )
+    with propagate_attributes(trace_name='chunk-embed'):
+        resp = await resources.llm.embeddings.create(
+            model=model,
+            input=[row['content'] for row in batch],
+            dimensions=1536,
+        )
     by_index = {item.index: item.embedding for item in resp.data}
     if len(by_index) != len(batch):
         raise RuntimeError('Chunk embedding. Unexpected embedding count!')
@@ -578,12 +597,12 @@ async def process_lexicon_embedding() -> None:
         return
 
     batch = rows[:limit]
-    resp = await resources.llm.embeddings.create(
-        name='lexicon-embed',
-        model=model,
-        input=[row['expanded'] for row in batch],
-        dimensions=1536,
-    )
+    with propagate_attributes(trace_name='lexicon-embed'):
+        resp = await resources.llm.embeddings.create(
+            model=model,
+            input=[row['expanded'] for row in batch],
+            dimensions=1536,
+        )
     by_index = {item.index: item.embedding for item in resp.data}
     if len(by_index) != len(batch):
         raise RuntimeError('Lexicon embedding. Unexpected embedding count!')
@@ -674,17 +693,16 @@ async def process_new_profile(profile_id: str) -> None:
 
     compiled_prompt = prompt.compile(text=row['text'])
 
-    with propagate_attributes(prompt=prompt):
+    with propagate_attributes(prompt=prompt, trace_name=prompt.name):
         resp = await resources.llm.responses.create(
-            name=prompt.name,
             model=prompt.config['model'],
-            input=compiled_prompt,
-            text={'format': {'type': 'json_object'}},
-            reasoning={'effort': 'low'},
+            input=openai_input(compiled_prompt),
+            text=JSON_TEXT,
+            reasoning=LOW_REASONING,
             metadata={'profile_id': profile_id},
         )
 
-    raw_resp = resp.choices[0].message.content
+    raw_resp = resp.output_text
     if not raw_resp:
         print('Profile extract. LLM response is empty!')
         async with resources.engine.begin() as conn:

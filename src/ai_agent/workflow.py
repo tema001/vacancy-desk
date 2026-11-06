@@ -1,5 +1,5 @@
 import json
-from typing import Literal, NotRequired
+from typing import Literal, NotRequired, assert_never
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -35,6 +35,14 @@ class ApprovalAnswer(BaseModel):
     answer: Literal['approve', 'reject', 'revise']
 
 
+def _prompt_text(name: str) -> str:
+    prompt = resources.get_prompt(name).prompt
+    if isinstance(prompt, str):
+        return prompt
+
+    raise TypeError(f'{name} is not a text prompt')
+
+
 @tool
 def get_feature_instructions(
     feature: Literal['profiles', 'vacancy_search'],
@@ -46,13 +54,12 @@ def get_feature_instructions(
     profiles: general description, how to list, read, and propose a profile update.
     vacancy_search: general description, how to fill args and how to read its rows.
     """
-    match feature:
-        case 'profiles':
-            return resources.get_prompt('profiles-sys-prompt').prompt
-        case 'vacancy_search':
-            return resources.get_prompt('vacancy-search-sys-prompt').prompt
-        case _:
-            return 'Unknown feature'
+    if feature == 'profiles':
+        return _prompt_text('profiles-sys-prompt')
+    if feature == 'vacancy_search':
+        return _prompt_text('vacancy-search-sys-prompt')
+
+    assert_never(feature)
 
 
 @tool
@@ -187,6 +194,8 @@ async def interpret_approval(state: State) -> DataDict:
     ).with_structured_output(ApprovalAnswer)
 
     resp = await model.ainvoke([SystemMessage(prompts.INTERPRET), *state['messages']])
+    resp = ApprovalAnswer.model_validate(resp)
+
     return {'decision': resp.answer}
 
 

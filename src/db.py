@@ -3,11 +3,11 @@ from datetime import datetime, timedelta
 
 import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import ARRAY, insert
-from sqlalchemy.engine.result import RowMapping
+from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio.engine import AsyncConnection
 from sqlalchemy.sql import Executable, asc, desc, func
 
-from src.enums import ProfileStatus
+from src.enums import ProfileStatus, VacancyStatus
 from src.models import (
     Profile,
     ProfileSkill,
@@ -17,7 +17,6 @@ from src.models import (
     VacancyChunk,
     VacancyExtract,
     VacancySkill,
-    VacancyStatus,
 )
 from src.types import DataDict, HybridSearchSchema, ParamsSchema, ScoringProfile
 
@@ -195,7 +194,7 @@ async def select_vacancies(
 ) -> tuple[int, Sequence[RowMapping]]:
     _order = desc if params.order == 2 else asc
 
-    filters = []
+    filters: list[sa.ColumnElement[bool]] = []
     if params.categories:
         filters.append(Vacancy.category.in_(params.categories))
 
@@ -212,6 +211,7 @@ async def select_vacancies(
     if params.eng_lvl:
         filters.append(Vacancy.english_level <= params.eng_lvl)
 
+    c_date_started: sa.SQLColumnExpression[datetime]
     if params.active_only:
         _from = Vacancy.__table__.join(
             VacanciesActivity,
@@ -427,7 +427,10 @@ async def select_total_importance_percentile(
     if not res:
         return None
 
-    return res['sum_percentile']
+    value = res['sum_percentile']
+    if value is None:
+        return None
+    return float(value)
 
 
 async def select_vacancies_by_ids(
@@ -580,8 +583,9 @@ async def update_skill_lexicon_expand(
         )
         .values(expanded=sa.bindparam('b_expanded'))
     )
+    rows = [data] if isinstance(data, dict) else data
     b_data = [
-        {'b_skill_name': d['skill_name'], 'b_expanded': d['expanded']} for d in data
+        {'b_skill_name': d['skill_name'], 'b_expanded': d['expanded']} for d in rows
     ]
 
     await conn.execute(stmt, b_data)
@@ -619,13 +623,14 @@ async def update_skill_lexicon_embed(
             embedding_model=sa.bindparam('b_embedding_model'),
         )
     )
+    rows = [data] if isinstance(data, dict) else data
     b_data = [
         {
             'b_skill_name': d['skill_name'],
             'b_expanded_vector': d['expanded_vector'],
             'b_embedding_model': d['embedding_model'],
         }
-        for d in data
+        for d in rows
     ]
 
     await conn.execute(stmt, b_data)

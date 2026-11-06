@@ -11,7 +11,7 @@ from sqlalchemy import (
 )
 
 
-class SmallIntEnum(TypeDecorator):
+class SmallIntEnum(TypeDecorator[IntEnum]):
     impl = SmallInteger
     cache_ok = True
 
@@ -31,7 +31,9 @@ class SmallIntEnum(TypeDecorator):
     def process_result_value(self, value: object, dialect: object) -> IntEnum | None:
         if value is None:
             return None
-        return self.enum_class(int(value))
+        if isinstance(value, int):
+            return self.enum_class(value)
+        raise TypeError(f'expected int, got {type(value)}')
 
 
 def _enum_from_name(enum_cls: type[IntEnum]) -> Callable[[Any], IntEnum]:

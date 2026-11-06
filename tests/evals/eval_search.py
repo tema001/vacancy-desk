@@ -9,6 +9,7 @@ from typing import TypedDict
 from zoneinfo import ZoneInfo
 
 import tests.evals.db as evals_db
+from langfuse import propagate_attributes
 from src.scoring import rank_bm25, rrf
 from src.shared.resources import resources
 
@@ -50,12 +51,12 @@ async def rank_query(
     keywords = set(re.findall(evals_db.TOKEN_RE, text.lower()))
 
     model = resources.config['llm']['embedding_model']
-    resp = await resources.llm.embeddings.create(
-        name='chunk-embed',
-        model=model,
-        input=text,
-        dimensions=1536,
-    )
+    with propagate_attributes(trace_name='search-text-embed'):
+        resp = await resources.llm.embeddings.create(
+            model=model,
+            input=text,
+            dimensions=1536,
+        )
     embed_query = resp.data[0].embedding
 
     async with resources.engine.connect() as conn:
