@@ -1,6 +1,6 @@
 import asyncio
 import importlib
-from collections.abc import Awaitable
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import procrastinate
@@ -13,7 +13,11 @@ resources.load_config()
 config = resources.config
 
 
-async def job_timeout(call_next, context: JobContext, worker: Worker) -> Awaitable[Any]:
+async def job_timeout(
+    call_next: Callable[[], Awaitable[Any]],
+    context: JobContext,
+    worker: Worker,
+) -> Any:
     async with asyncio.timeout(30):
         return await call_next()
 

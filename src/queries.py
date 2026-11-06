@@ -1,5 +1,7 @@
 import re
 
+from langfuse import propagate_attributes
+
 import src.db as db
 from src.enums import JobFamily, ProfileStatus
 from src.scoring import SIMILARITY_THRESHOLD, rank_bm25, rank_vacancy_matches, rrf
@@ -117,12 +119,12 @@ async def get_search_response(params: HybridSearchSchema) -> DataDict:
     keywords = set(re.findall(db.TOKEN_RE, text.lower()))
 
     model = resources.config['llm']['embedding_model']
-    resp = await resources.llm.embeddings.create(
-        name='chunk-embed',
-        model=model,
-        input=text,
-        dimensions=1536,
-    )
+    with propagate_attributes(trace_name='search-text-embed'):
+        resp = await resources.llm.embeddings.create(
+            model=model,
+            input=text,
+            dimensions=1536,
+        )
     embed_query = resp.data[0].embedding
 
     async with resources.engine.connect() as conn:

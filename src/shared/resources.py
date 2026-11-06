@@ -5,10 +5,11 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
 
 import httpx2
+import langfuse.openai  # noqa: F401
 from envyaml import EnvYAML
 from langfuse import Langfuse
 from langfuse.model import PromptClient
-from langfuse.openai import AsyncOpenAI
+from openai import AsyncOpenAI
 from sqlalchemy.engine.url import URL, make_url
 from sqlalchemy.ext.asyncio import AsyncEngine
 from sqlalchemy.ext.asyncio.engine import create_async_engine
@@ -88,7 +89,7 @@ class Resources:
     def get_prompt(self, name: str) -> PromptClient:
         label = self.config['llm']['prompt_label']
 
-        return self.langfuse.get_prompt(name, type='chat', label=label)
+        return self.langfuse.get_prompt(name, label=label)
 
     async def start(
         self,
@@ -140,12 +141,13 @@ class Resources:
 
         if init_agent:
             from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+            from psycopg import AsyncConnection
             from psycopg.rows import dict_row
             from psycopg_pool import AsyncConnectionPool
 
             from src.ai_agent.workflow import builder
 
-            pool = AsyncConnectionPool(
+            pool = AsyncConnectionPool[AsyncConnection[dict[str, Any]]](
                 conninfo=db['dsn'],
                 kwargs={
                     'autocommit': True,

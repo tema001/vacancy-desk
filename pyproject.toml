@@ -88,6 +88,10 @@ module = [
 ]
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+module = ["src.db", "src.ai_agent.db"]
+warn_return_any = false
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"

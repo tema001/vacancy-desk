@@ -42,7 +42,7 @@ class ParamsSchema(BaseModel):
 
 
 class HybridSearchSchema(BaseModel):
-    query: str = Field(default=20, gt=0, le=20)
+    query: str = Field(min_length=3)
 
     exp: int | None = Field(default=None, gt=0, lt=20)  # years
     salary_min: int | None = Field(default=None, gt=0, lt=100_000)

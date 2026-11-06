@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
@@ -223,7 +224,7 @@ class ChatActions(Base):
     chat_id: Mapped[str] = mapped_column(ForeignKey('chats.id'))
     action_type: Mapped[ChatActionType] = mapped_column(SmallIntEnum(ChatActionType))
     item_id: Mapped[str]
-    payload: Mapped[dict] = mapped_column(JSONB)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB)
 
     date_created: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=func.now()

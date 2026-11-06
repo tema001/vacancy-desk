@@ -22,7 +22,7 @@ RUN --mount=from=ghcr.io/astral-sh/uv:0.11.7,source=/uv,target=/bin/uv \
 
 FROM base AS dev
 RUN --mount=from=ghcr.io/astral-sh/uv:0.11.7,source=/uv,target=/bin/uv \
-    uv sync --frozen --no-install-project --no-default-groups --group worker --group dev
+    uv sync --frozen --no-install-project --no-default-groups --group worker --group dev --group http-service
 
 FROM base AS pre_build
 

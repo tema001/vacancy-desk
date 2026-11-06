@@ -3,7 +3,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
-from typing import Literal, cast
+from typing import Any, Literal, cast
 
 type GeoKind = Literal['continent', 'country', 'city']
 
@@ -155,7 +155,7 @@ def save_index(index: _GeoIndex) -> None:
     INDEX_PATH.write_bytes(pickle.dumps(index, protocol=5))
 
 
-def _keep_country(country: Mapping) -> bool:
+def _keep_country(country: Mapping[str, Any]) -> bool:
     continent_id = country['continentcode'].lower()
     if continent_id in SKIP_CONTINENTS:
         return False
