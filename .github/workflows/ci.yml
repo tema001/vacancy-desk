@@ -7,9 +7,21 @@ on:
   workflow_dispatch:
 
 jobs:
-  python:
+  lint-mypy:
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+      - run: uv sync --group dev --group http-service --group worker
+      - run: uv run ruff check src
+      - run: uv run ruff format --check src
+      - run: uv run mypy src
 
+  test:
+    needs: lint-mypy
+    runs-on: ubuntu-latest
     services:
       postgres:
         image: pgvector/pgvector:pg18
@@ -31,9 +43,6 @@ jobs:
       - uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.13"
-      - run: uv sync --group dev --group http-service --group worker
-      - run: uv run ruff check src
-      - run: uv run ruff format --check src
-      - run: uv run mypy src
+      - run: uv sync --group dev --group worker
       - run: uv run --env-file config/test.env alembic upgrade head
       - run: uv run --env-file config/test.env pytest
