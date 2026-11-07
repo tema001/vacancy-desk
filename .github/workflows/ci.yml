@@ -14,6 +14,7 @@ jobs:
       - uses: astral-sh/setup-uv@v7
         with:
           python-version: "3.13"
+          enable-cache: true
       - run: uv sync --group dev --group http-service --group worker
       - run: uv run ruff check src
       - run: uv run ruff format --check src
@@ -43,6 +44,7 @@ jobs:
       - uses: astral-sh/setup-uv@v7
         with:
           python-version: "3.13"
+          enable-cache: true
       - run: uv sync --group dev --group worker
       - run: uv run --env-file config/test.env alembic upgrade head
       - run: uv run --env-file config/test.env pytest
