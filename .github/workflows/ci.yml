@@ -39,8 +39,8 @@ jobs:
     env:
       DB_HOST: localhost
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
         with:
           python-version: "3.13"
       - run: uv sync --group dev --group worker
