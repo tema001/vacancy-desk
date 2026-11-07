@@ -9,7 +9,8 @@ wheels/
 .venv
 
 # other
-.cursor/
+.cursor/agents
+.cursor/skills
 .idea/
 .other
 dist/

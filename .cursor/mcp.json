@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "postgres": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@kaiva/postgres-mcp@0.1.1",
+        "postgresql://agent_ro:l65XbV7fc4owbikIcSfkUP8A@127.0.0.1:5432/jobs"
+      ]
+    }
+  }
+}
