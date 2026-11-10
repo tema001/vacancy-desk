@@ -1,9 +1,11 @@
 import asyncio
 import json
+import math
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
+from functools import partial
 from pathlib import Path
 from typing import TypedDict
 from zoneinfo import ZoneInfo
@@ -28,13 +30,12 @@ class MetricObj:
     max_fn: Callable[[set[str]], float] | None
 
 
-def precision_at_10(ranked_ids: list[str], relevant: set[str]) -> float:
-    k = 10
+def precision_at(ranked_ids: list[str], relevant: set[str], k: int) -> float:
     return sum(vacancy_id in relevant for vacancy_id in ranked_ids[:k]) / k
 
 
-def max_precision_at_10(relevant: set[str]) -> float:
-    return min(len(relevant), 10) / 10
+def max_precision_at(relevant: set[str], k: int) -> float:
+    return min(len(relevant), k) / k
 
 
 def reciprocal_rank(ranked_ids: list[str], relevant: set[str]) -> float:
@@ -42,6 +43,35 @@ def reciprocal_rank(ranked_ids: list[str], relevant: set[str]) -> float:
         if vacancy_id in relevant:
             return 1 / rank
     return 0.0
+
+
+def recall_at(ranked_ids: list[str], relevant: set[str], k: int) -> float:
+    if not relevant:
+        return 0.0
+    hits = sum(vacancy_id in relevant for vacancy_id in ranked_ids[:k])
+    return hits / len(relevant)
+
+
+def max_recall_at(relevant: set[str], k: int) -> float:
+    if not relevant:
+        return 0.0
+    return min(len(relevant), k) / len(relevant)
+
+
+def _dcg_at(ranked_ids: list[str], relevant: set[str], k: int) -> float:
+    gain = 0.0
+    for rank, vacancy_id in enumerate(ranked_ids[:k], start=1):
+        if vacancy_id in relevant:
+            gain += 1.0 / math.log2(rank + 1)
+    return gain
+
+
+def ndcg_at(ranked_ids: list[str], relevant: set[str], k: int) -> float:
+    ideal_hits = min(len(relevant), k)
+    if ideal_hits == 0:
+        return 0.0
+    idcg = sum(1.0 / math.log2(rank + 1) for rank in range(1, ideal_hits + 1))
+    return _dcg_at(ranked_ids, relevant, k) / idcg
 
 
 async def rank_query(
@@ -91,7 +121,7 @@ async def rank_query(
 async def evaluate(
     cases: list[QueryCase], date_from: datetime, date_to: datetime
 ) -> None:
-    #           p@10  mrr
+    #            p@k  rr
     #             v    v
     # { 'bm25': [1.0, 1.0], ... }
     totals = {}
@@ -120,6 +150,7 @@ async def evaluate(
             print(f'  {rank_name}  {rendered}')
 
     count = len(cases)
+    print()
     print(f'mean over {count} queries')
     for rank_name, sums in totals.items():
         rendered = '  '.join(
@@ -147,21 +178,40 @@ async def main() -> None:
 
 
 if __name__ == '__main__':
-    # python react typescript | max P@10=0.800
-    #   bm25  P@10=0.600  MRR=1.000
-    #   cosine  P@10=0.500  MRR=1.000
-    #   rrf  P@10=0.700  MRR=1.000
-    # senior python fastapi postgresql | max P@10=1.000
-    #   bm25  P@10=0.500  MRR=1.000
-    #   cosine  P@10=0.700  MRR=1.000
-    #   rrf  P@10=0.900  MRR=1.000
-    # mean over 2 queries
-    #   bm25  P@10=0.550  MRR=1.000
-    #   cosine  P@10=0.600  MRR=1.000
-    #   rrf  P@10=0.800  MRR=1.000
+    # docker compose run --rm -v ./tests:/app/tests app python -m tests.evals.eval_search
 
+    # python react typescript | max P@10=0.800, max R@20=1.000
+    #   bm25  P@10=0.600  RR=1.000  R@20=1.000  nDCG@10=0.758
+    #   cosine  P@10=0.500  RR=1.000  R@20=0.875  nDCG@10=0.674
+    #   rrf  P@10=0.700  RR=1.000  R@20=1.000  nDCG@10=0.891
+    # senior python fastapi postgresql | max P@10=1.000, max R@20=1.000
+    #   bm25  P@10=0.500  RR=1.000  R@20=0.615  nDCG@10=0.508
+    #   cosine  P@10=0.600  RR=1.000  R@20=0.769  nDCG@10=0.699
+    #   rrf  P@10=0.900  RR=1.000  R@20=0.923  nDCG@10=0.915
+    #
+    # mean over 2 queries
+    #   bm25  P@10=0.550  RR=1.000  R@20=0.808  nDCG@10=0.633
+    #   cosine  P@10=0.550  RR=1.000  R@20=0.822  nDCG@10=0.687
+    #   rrf  P@10=0.800  RR=1.000  R@20=0.962  nDCG@10=0.903
+
+    k_10 = 10
+    k_20 = 20
     METRICS = (
-        MetricObj(label='P@10', fn=precision_at_10, max_fn=max_precision_at_10),
-        MetricObj(label='MRR', fn=reciprocal_rank, max_fn=None),
+        MetricObj(
+            label=f'P@{k_10}',
+            fn=partial(precision_at, k=k_10),
+            max_fn=partial(max_precision_at, k=k_10),
+        ),
+        MetricObj(label='RR', fn=reciprocal_rank, max_fn=None),
+        MetricObj(
+            label=f'R@{k_20}',
+            fn=partial(recall_at, k=k_20),
+            max_fn=partial(max_recall_at, k=k_20),
+        ),
+        MetricObj(
+            label=f'nDCG@{k_10}',
+            fn=partial(ndcg_at, k=k_10),
+            max_fn=None,
+        ),
     )
     asyncio.run(main())
