@@ -6,6 +6,9 @@ Create Date: 2026-11-07 17:12:00.000000
 
 """
 
+import os
+import secrets
+
 import sqlalchemy as sa
 from alembic import op
 
@@ -25,14 +28,30 @@ def _role_exists() -> bool:
     return row is not None
 
 
+def _quote_literal(value: str) -> str:
+    quoted = "'" + value.replace("'", "''") + "'"
+    # psycopg treats '%' as a placeholder even when no parameters are passed.
+    return quoted.replace('%', '%%')
+
+
+def _agent_ro_password() -> str:
+    password = os.environ.get('AGENT_RO_PASSWORD', '').strip()
+    if password:
+        return password
+
+    password = secrets.token_urlsafe(24)
+    print(f'AGENT_RO_PASSWORD is unset! Generated password for role agent_ro: {password}')
+    return password
+
+
 def upgrade() -> None:
     if not _role_exists():
+        literal = _quote_literal(_agent_ro_password())
         with op.get_context().autocommit_block():
-            op.execute(
-                sa.text(
-                    "CREATE ROLE agent_ro LOGIN PASSWORD 'l65XbV7fc4owbikIcSfkUP8A' "
-                    'NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOREPLICATION'
-                )
+            op.get_bind().exec_driver_sql(
+                f"CREATE ROLE agent_ro LOGIN PASSWORD {literal} "
+                'NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOREPLICATION'
+
             )
 
     op.execute(
