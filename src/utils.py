@@ -420,6 +420,11 @@ async def process_vacancy_extract(vacancy_id: str) -> None:
             await _add_vacancy_skill_and_lexicon(conn, vacancy_id, data.skills)
             await conn.commit()
 
+    # from src.tasks import lexicon_expand
+    #
+    # with suppress(AlreadyEnqueued):
+    #     await lexicon_expand.configure(schedule_in={'minutes': 1}).defer_async()
+
 
 async def process_lexicon_expanding() -> None:
     prompt = resources.get_prompt('lexicon-expand')
