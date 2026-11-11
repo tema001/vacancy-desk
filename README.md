@@ -12,6 +12,45 @@ Vacancy Desk is a pet project that grew out of my own job search. Instead of scr
 - **AI agent on LangGraph**: tool calling, Postgres checkpointer for chat state, and human-in-the-loop approval (`interrupt`) before the agent changes a profile.
 - **Profiles**: a user uploads their resume (CV) text, the LLM extracts skills with depth, job families, experience, English level and seniority, and vacancies are scored against the resulting profile.
 
+## Getting started
+
+Requirements: Docker, an OpenAI API key, and a Langfuse project.
+
+> [!IMPORTANT]
+> The project does not start without its prompts in Langfuse. They are not stored in this repository: create `vacancy-extract`, `profile-extract`, `lexicon-expand`, `profiles-sys-prompt` and `vacancy-search-sys-prompt` in your Langfuse project and tag them with the label set in `PROMPT_LABEL`.
+
+```bash
+# 1. Copy the env template and replace the placeholders with real values
+cp config/local.example.env config/local.env
+
+# 2. Build the frontend (outputs to frontend/dist, mounted into the API container)
+docker compose run --rm build-static
+
+# 3. Start Postgres and apply migrations
+docker compose up -d postgres
+docker compose run --rm alembic upgrade head
+
+# 4. Start the API and the background worker
+docker compose up --build app worker
+```
+
+- App: http://localhost:8000/app
+- API docs: http://localhost:8000/docs
+
+Frontend dev server with hot reload (instead of step 2). Vite proxies `/api` to the `app` service, so that container has to be running:
+
+```bash
+docker compose up run-static   # http://localhost:5173/app/
+```
+
+## Tests & quality
+
+```bash
+docker compose run --rm pytest        # applies migrations to a test DB, then runs pytest
+docker compose run --rm lint-mypy     # ruff format + ruff check + mypy (strict)
+```
+CI (GitHub Actions) runs lint, mypy and tests against a `pgvector` Postgres service on pushes to `main`, on pull requests, and on manual dispatch.
+
 ## Architecture
 
 ### Ingestion pipeline
@@ -51,44 +90,6 @@ flowchart TB
 
 Tools: `get_feature_instructions`, `list_profiles`, `get_profile`, `prepare_update_profile` and `search_vacancies` (hybrid search). The agent cannot change a profile directly: `prepare_update_profile` only proposes a patch, which is stored as a pending action. 
 
-## Getting started
-
-Requirements: Docker, an OpenAI API key, and a Langfuse project.
-
-> [!IMPORTANT]
-> The project does not start without its prompts in Langfuse. They are not stored in this repository: create `vacancy-extract`, `profile-extract`, `lexicon-expand`, `profiles-sys-prompt` and `vacancy-search-sys-prompt` in your Langfuse project and tag them with the label set in `PROMPT_LABEL`.
-
-```bash
-# 1. Copy the env template and replace the placeholders with real values
-cp config/local.example.env config/local.env
-
-# 2. Build the frontend (outputs to frontend/dist, mounted into the API container)
-docker compose run --rm build-static
-
-# 3. Start Postgres and apply migrations
-docker compose up -d postgres
-docker compose run --rm alembic upgrade head
-
-# 4. Start the API and the background worker
-docker compose up --build app worker
-```
-
-- App: http://localhost:8000/app
-- API docs: http://localhost:8000/docs
-
-Frontend dev server with hot reload (instead of step 2). Vite proxies `/api` to the `app` service, so that container has to be running:
-
-```bash
-docker compose up run-static   # http://localhost:5173/app/
-```
-
-## Tests & quality
-
-```bash
-docker compose run --rm pytest        # applies migrations to a test DB, then runs pytest
-docker compose run --rm lint-mypy     # ruff format + ruff check + mypy (strict)
-```
-CI (GitHub Actions) runs lint, mypy and tests against a `pgvector` Postgres service on pushes to `main`, on pull requests, and on manual dispatch.
 
 ## Roadmap
 
