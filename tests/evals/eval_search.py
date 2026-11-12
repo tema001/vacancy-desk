@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 import json
 import math
@@ -7,15 +8,17 @@ from dataclasses import dataclass
 from datetime import datetime
 from functools import partial
 from pathlib import Path
-from typing import TypedDict
+from typing import Any, TypedDict
 from zoneinfo import ZoneInfo
 
 import tests.evals.db as evals_db
-from langfuse import propagate_attributes
+from langfuse import Evaluation, propagate_attributes
 from src.scoring import rank_bm25, rrf
 from src.shared.resources import resources
 
 QUERIES_PATH = Path(__file__).resolve().parent / 'data' / 'queries.json'
+LANGFUSE_DATASET = 'search-eval'
+LANGFUSE_EXPERIMENT = 'search-ranking'
 
 
 class QueryCase(TypedDict):
@@ -74,6 +77,10 @@ def ndcg_at(ranked_ids: list[str], relevant: set[str], k: int) -> float:
     return _dcg_at(ranked_ids, relevant, k) / idcg
 
 
+def parse_date(value: str, tz: ZoneInfo) -> datetime:
+    return datetime.fromisoformat(value).replace(tzinfo=tz)
+
+
 async def rank_query(
     query: str, date_from: datetime, date_to: datetime
 ) -> dict[str, list[str]]:
@@ -100,7 +107,7 @@ async def rank_query(
                 bm_rows,
                 N=int(first['total_count']),
                 avg_dl=float(first['avg_length']),
-            )
+            )[:50]
         else:
             bm25_rank = []
 
@@ -160,17 +167,63 @@ async def evaluate(
         print(f'  {rank_name}  {rendered}')
 
 
-async def main() -> None:
-    test_data = json.loads(QUERIES_PATH.read_text())
-    if not test_data:
-        print(f'{QUERIES_PATH} is empty')
+def metrics_evaluator(
+    *,
+    input: Any,
+    output: dict[str, list[str]],
+    expected_output: Any,
+    metadata: dict[str, Any] | None,
+    **kwargs: Any,
+) -> list[Evaluation]:
+    relevant = set(expected_output['relevant_ids'])
+    return [
+        Evaluation(name=f'{rank_name}_{m.label}', value=m.fn(ids, relevant))
+        for rank_name, ids in output.items()
+        for m in METRICS
+    ]
+
+
+async def evaluate_langfuse(tz: ZoneInfo) -> None:
+    dataset = resources.langfuse.get_dataset(LANGFUSE_DATASET)
+    if not dataset.items:
+        print(f'langfuse dataset {LANGFUSE_DATASET} is empty')
         return
 
+    # precomputed rankings output
+    # { query: { 'bm25': [...], ... } }
+    ranked: dict[str, dict[str, list[str]]] = {}
+    for item in dataset.items:
+        date_from = parse_date(item.metadata['from'], tz)
+        date_to = parse_date(item.metadata['to'], tz)
+        ranked[item.id] = await rank_query(item.input['query'], date_from, date_to)
+
+    def task(*, item: Any, **kwargs: Any) -> dict[str, list[str]]:
+        return ranked[item.id]
+
+    result = dataset.run_experiment(
+        name=LANGFUSE_EXPERIMENT,
+        task=task,
+        evaluators=[metrics_evaluator],
+    )
+    print(result.format())
+
+
+async def main(cloud_run: bool) -> None:
     await resources.start(start_llm=True)
     try:
         tz = ZoneInfo(resources.config['app']['time_zone'])
-        date_from = datetime.fromisoformat(test_data['from']).replace(tzinfo=tz)
-        date_to = datetime.fromisoformat(test_data['to']).replace(tzinfo=tz)
+
+        if cloud_run:
+            await evaluate_langfuse(tz)
+            return
+
+        test_data = json.loads(QUERIES_PATH.read_text())
+        if not test_data:
+            print(f'{QUERIES_PATH} is empty')
+            return
+
+        date_from = parse_date(test_data['from'], tz)
+        date_to = parse_date(test_data['to'], tz)
 
         await evaluate(test_data['cases'], date_from, date_to)
     finally:
@@ -179,6 +232,14 @@ async def main() -> None:
 
 if __name__ == '__main__':
     # docker compose run --rm -v ./tests:/app/tests app python -m tests.evals.eval_search
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '--cloud',
+        dest='cloud_run',
+        action='store_true',
+        help='run as a Langfuse experiment instead of locally on data/queries.json',
+    )
+    args = parser.parse_args()
 
     # python react typescript | max P@10=0.800, max R@20=1.000
     #   bm25  P@10=0.600  RR=1.000  R@20=1.000  nDCG@10=0.758
@@ -214,4 +275,4 @@ if __name__ == '__main__':
             max_fn=None,
         ),
     )
-    asyncio.run(main())
+    asyncio.run(main(args.cloud_run))
