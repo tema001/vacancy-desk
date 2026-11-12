@@ -6,11 +6,16 @@
   --surface-raised: #202420;
   --surface-hover: #252a25;
   --border: #303530;
+  --border-hover: #454b45;
   --text: #f1f3f1;
   --text-muted: #9aa19a;
   --accent: #287a47;
   --accent-hover: #329657;
   --accent-soft: rgb(40 122 71 / 16%);
+  --warning: #d4b66f;
+  --danger: #d2928d;
+  --danger-border: #70423f;
+  --danger-bg: #291d1c;
   --focus-ring: rgb(40 122 71 / 28%);
 
   font-family:

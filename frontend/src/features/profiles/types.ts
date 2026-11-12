@@ -1,3 +1,5 @@
+import type { EnglishLevel } from '../../shared/englishLevel'
+
 export type ProfileStatus = 'pending' | 'ready' | 'failed'
 
 export interface Profile {
@@ -13,7 +15,6 @@ export interface ProfileListResponse {
   rows: Profile[]
 }
 
-export type EnglishLevel = 1 | 2 | 3 | 4 | 5 | 6
 export type SkillDepth = 1 | 2 | 3 | 4
 
 export interface ProfileSkill {

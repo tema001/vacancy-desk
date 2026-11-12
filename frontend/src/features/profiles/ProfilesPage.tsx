@@ -1,115 +1,63 @@
-import { useRef, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
-  fetchProfile,
   fetchProfiles,
   deleteProfile,
   setProfileSelected,
-  isAbortError,
-  isExtractedProfile,
+  profileKey,
+  profilesKey,
 } from './api'
+import { RefreshButton } from '../../shared/RefreshButton'
+import { StateMessage } from '../../shared/StateMessage'
 import { ProfileCard } from './ProfileCard'
 import { ProfileDetailsModal } from './ProfileDetailsModal'
 import { ProfileFormModal } from './ProfileFormModal'
-import type { ExtractedProfile, Profile } from './types'
 import './profiles.css'
 
-interface ProfileDetailsView {
-  id: string
-  name: string
-  isSelected: boolean
-  profile: ExtractedProfile | null
-  errorMessage: string | null
-}
-
 export function ProfilesPage() {
+  const queryClient = useQueryClient()
   const [isCreateOpen, setIsCreateOpen] = useState(false)
-  const [details, setDetails] = useState<ProfileDetailsView | null>(null)
-  const detailsAbortRef = useRef<AbortController | null>(null)
+  const [openedId, setOpenedId] = useState<string | null>(null)
   const profilesQuery = useQuery({
-    queryKey: ['profiles'],
+    queryKey: profilesKey,
     queryFn: fetchProfiles,
   })
   const profiles = profilesQuery.data?.rows ?? []
+  const openedProfile = profiles.find((profile) => profile.id === openedId)
 
-  function closeDetails(): void {
-    detailsAbortRef.current?.abort()
-    setDetails(null)
-  }
-
-  async function openProfile(profile: Profile): Promise<void> {
-    if (profile.status !== 'ready') {
-      return
-    }
-
-    detailsAbortRef.current?.abort()
-    const controller = new AbortController()
-    detailsAbortRef.current = controller
-    setDetails({
-      id: profile.id,
-      name: profile.name,
-      isSelected: profile.is_selected,
-      profile: null,
-      errorMessage: null,
-    })
-
-    try {
-      const data = await fetchProfile(profile.id, controller.signal)
-      if (!isExtractedProfile(data)) {
-        setDetails({
-          id: profile.id,
-          name: profile.name,
-          isSelected: profile.is_selected,
-          profile: null,
-          errorMessage: 'Profile is not ready',
-        })
-        return
+  const deleteMutation = useMutation({
+    mutationFn: deleteProfile,
+    onSuccess: async (_data, profileId) => {
+      if (openedId === profileId) {
+        setOpenedId(null)
       }
+      queryClient.removeQueries({ queryKey: profileKey(profileId) })
+      await queryClient.invalidateQueries({ queryKey: profilesKey })
+    },
+  })
 
-      setDetails({
-        id: data.id,
-        name: data.name,
-        isSelected: data.is_selected,
-        profile: data,
-        errorMessage: null,
-      })
-    } catch (error) {
-      if (isAbortError(error) || controller.signal.aborted) {
-        return
-      }
+  const selectMutation = useMutation({
+    mutationFn: (input: { profileId: string; isSelected: boolean }) =>
+      setProfileSelected(input.profileId, input.isSelected),
+    onSuccess: async (_data, input) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: profilesKey }),
+        queryClient.invalidateQueries({ queryKey: profileKey(input.profileId) }),
+      ])
+    },
+  })
 
-      setDetails({
-        id: profile.id,
-        name: profile.name,
-        isSelected: profile.is_selected,
-        profile: null,
-        errorMessage:
-          error instanceof Error ? error.message : 'Could not load profile',
-      })
-    }
+  const isBusy = deleteMutation.isPending || selectMutation.isPending
+  const actionError = deleteMutation.error ?? selectMutation.error
+
+  function handleDelete(profileId: string): void {
+    selectMutation.reset()
+    deleteMutation.mutate(profileId)
   }
 
-  async function handleDelete(profile: Profile): Promise<void> {
-    if (profile.status === 'pending') {
-      return
-    }
-
-    await deleteProfile(profile.id)
-
-    if (details?.id === profile.id) {
-      closeDetails()
-    }
-
-    await profilesQuery.refetch()
-  }
-
-  async function handleSetSelected(profile: Profile, isSelected: boolean): Promise<void> {
-    if (profile.status !== 'ready') {
-      return
-    }
-
-    await setProfileSelected(profile.id, isSelected)
-    await profilesQuery.refetch()
+  function handleSetSelected(profileId: string, isSelected: boolean): void {
+    deleteMutation.reset()
+    selectMutation.mutate({ profileId, isSelected })
   }
 
   return (
@@ -130,73 +78,56 @@ export function ProfilesPage() {
             >
               Add new
             </button>
-            <button
-              type="button"
-              className="secondary-button refresh-button"
+            <RefreshButton
               onClick={() => void profilesQuery.refetch()}
               disabled={profilesQuery.isFetching}
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M20 11a8.1 8.1 0 0 0-14.9-4M4 4v4h4m-4 5a8.1 8.1 0 0 0 14.9 4M20 20v-4h-4" />
-              </svg>
-              Refresh
-            </button>
+            />
           </div>
         </section>
 
+        {actionError ? (
+          <div className="inline-error" role="alert">
+            {actionError.message}
+          </div>
+        ) : null}
+
         {profilesQuery.isPending ? (
-          <div className="state-message" role="status">
-            <span className="spinner large-spinner" aria-hidden="true" />
-            <strong>Loading profiles</strong>
-            <span>Fetching the latest results.</span>
-          </div>
+          <StateMessage
+            kind="loading"
+            title="Loading profiles"
+            text="Fetching the latest results."
+          />
         ) : profilesQuery.isError && profiles.length === 0 ? (
-          <div className="state-message error-state" role="alert">
-            <span className="state-icon" aria-hidden="true">
-              !
-            </span>
-            <strong>Could not load profiles</strong>
-            <span>
-              {profilesQuery.error instanceof Error
+          <StateMessage
+            kind="error"
+            title="Could not load profiles"
+            text={
+              profilesQuery.error instanceof Error
                 ? profilesQuery.error.message
-                : 'An unexpected error occurred.'}
-            </span>
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => void profilesQuery.refetch()}
-            >
-              Try again
-            </button>
-          </div>
+                : 'An unexpected error occurred.'
+            }
+            action={{
+              label: 'Try again',
+              onClick: () => void profilesQuery.refetch(),
+            }}
+          />
         ) : profiles.length === 0 ? (
-          <div className="state-message">
-            <span className="state-icon empty-icon" aria-hidden="true">
-              0
-            </span>
-            <strong>No profiles yet</strong>
-            <span>Add a resume to create the first profile.</span>
-          </div>
+          <StateMessage
+            kind="empty"
+            title="No profiles yet"
+            text="Add a resume to create the first profile."
+          />
         ) : (
           <section className="profiles-grid" aria-label="Resume profiles">
             {profiles.map((profile) => (
               <ProfileCard
                 profile={profile}
                 key={profile.id}
-                onOpen={
-                  profile.status === 'ready'
-                    ? () => void openProfile(profile)
-                    : undefined
-                }
-                onDelete={
-                  profile.status !== 'pending'
-                    ? () => void handleDelete(profile)
-                    : undefined
-                }
-                onSetSelected={
-                  profile.status === 'ready'
-                    ? (isSelected) => void handleSetSelected(profile, isSelected)
-                    : undefined
+                isBusy={isBusy}
+                onOpen={() => setOpenedId(profile.id)}
+                onDelete={() => handleDelete(profile.id)}
+                onSetSelected={(isSelected) =>
+                  handleSetSelected(profile.id, isSelected)
                 }
               />
             ))}
@@ -204,19 +135,13 @@ export function ProfilesPage() {
         )}
 
         {isCreateOpen ? (
-          <ProfileFormModal
-            onClose={() => setIsCreateOpen(false)}
-            onCreated={() => void profilesQuery.refetch()}
-          />
+          <ProfileFormModal onClose={() => setIsCreateOpen(false)} />
         ) : null}
 
-        {details ? (
+        {openedProfile ? (
           <ProfileDetailsModal
-            name={details.name}
-            isSelected={details.isSelected}
-            profile={details.profile}
-            errorMessage={details.errorMessage}
-            onClose={closeDetails}
+            profile={openedProfile}
+            onClose={() => setOpenedId(null)}
           />
         ) : null}
       </main>

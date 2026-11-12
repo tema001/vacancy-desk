@@ -1,3 +1,4 @@
+import { englishLevelLabels, type EnglishLevel } from '../../shared/englishLevel'
 import type { ProfileSkill, SkillDepth } from './types'
 
 const jobFamilyLabels: Record<string, string> = {
@@ -18,15 +19,6 @@ const jobFamilyLabels: Record<string, string> = {
   other: 'Other',
 }
 
-const englishLevelLabels: Record<number, string> = {
-  1: 'A1',
-  2: 'A2',
-  3: 'B1',
-  4: 'B2',
-  5: 'C1',
-  6: 'C2',
-}
-
 const skillDepthOrder: SkillDepth[] = [4, 3, 2, 1]
 
 export const skillDepthLabels: Record<SkillDepth, string> = {
@@ -44,7 +36,7 @@ export function formatSeniority(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1)
 }
 
-export function formatExperience(months: number): { years: string; months: string } {
+export function splitExperience(months: number): { years: string; months: string } {
   const years = Math.floor(months / 12)
   const yearLabel = years === 1 ? 'year' : 'years'
   const monthLabel = months === 1 ? 'month' : 'months'
@@ -55,8 +47,8 @@ export function formatExperience(months: number): { years: string; months: strin
   }
 }
 
-export function formatEnglishLevel(level: number): string {
-  return englishLevelLabels[level] ?? String(level)
+export function formatEnglishLevel(level: EnglishLevel): string {
+  return englishLevelLabels[level]
 }
 
 export function groupSkillsByDepth(skills: ProfileSkill[]): {

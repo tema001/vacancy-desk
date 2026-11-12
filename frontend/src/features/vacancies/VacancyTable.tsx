@@ -1,7 +1,7 @@
 import {
   formatDate,
   formatDateTitle,
-  formatExperience,
+  formatExperienceYears,
   formatSalary,
   formatScore,
   sourceLabels,
@@ -84,7 +84,7 @@ export function VacancyTable({
                     <span>{vacancy.location_str}</span>
                   ) : null}
                   {vacancy.experience !== null ? (
-                    <span>{formatExperience(vacancy.experience)}</span>
+                    <span>{formatExperienceYears(vacancy.experience)}</span>
                   ) : null}
                 </div>
               </td>
