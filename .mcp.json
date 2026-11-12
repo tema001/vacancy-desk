@@ -5,7 +5,7 @@
       "args": [
         "-y",
         "@kaiva/postgres-mcp@0.1.1",
-        "postgresql://agent_ro:<AGENT_RO_PASSWORD>@127.0.0.1:5432/jobs"
+        "postgresql://agent_ro:${AGENT_RO_PASSWORD}@127.0.0.1:5432/jobs"
       ]
     }
   }
