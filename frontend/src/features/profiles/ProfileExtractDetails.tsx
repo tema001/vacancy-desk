@@ -1,10 +1,10 @@
 import {
   formatEnglishLevel,
-  formatExperience,
   formatJobFamily,
   formatSeniority,
   groupSkillsByDepth,
   skillDepthLabels,
+  splitExperience,
 } from './format'
 import type { ExtractedProfile } from './types'
 
@@ -18,7 +18,7 @@ export function ProfileExtractDetails({ profile }: ProfileExtractDetailsProps) {
   const jobFamilies = profile.job_families ?? []
   const skillSegments = groupSkillsByDepth(profile.skills)
   const experience =
-    profile.experience == null ? null : formatExperience(profile.experience)
+    profile.experience == null ? null : splitExperience(profile.experience)
 
   return (
     <dl className="profile-extract-fields">

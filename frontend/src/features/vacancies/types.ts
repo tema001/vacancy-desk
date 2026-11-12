@@ -1,3 +1,5 @@
+import type { EnglishLevel } from '../../shared/englishLevel'
+
 export type VacancySource = 1 | 2
 export type VacancyStatus = 1 | 2 | 3 | 4
 
@@ -18,7 +20,6 @@ export interface Vacancy {
 }
 
 export type VacancyOrder = 1 | 2
-export type EnglishLevel = 1 | 2 | 3 | 4 | 5 | 6
 
 export interface VacancyParams {
   categories: string[] | null

@@ -10,6 +10,8 @@ import {
   saveFiltersToSearch,
   type VacancyFilters,
 } from './filters'
+import { RefreshButton } from '../../shared/RefreshButton'
+import { StateMessage } from '../../shared/StateMessage'
 import { VacancyFiltersPanel } from './VacancyFiltersPanel'
 import { VacancyTable } from './VacancyTable'
 import type { ScoredVacancy, Vacancy, VacancyOrder } from './types'
@@ -160,17 +162,10 @@ export function VacanciesPage() {
                 </span>
               ) : null}
             </button>
-            <button
-              type="button"
-              className="secondary-button refresh-button"
+            <RefreshButton
               onClick={handleRefresh}
               disabled={listQuery.isFetching}
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M20 11a8.1 8.1 0 0 0-14.9-4M4 4v4h4m-4 5a8.1 8.1 0 0 0 14.9 4M20 20v-4h-4" />
-              </svg>
-              Refresh
-            </button>
+            />
           </div>
         </section>
 
@@ -258,59 +253,43 @@ export function VacanciesPage() {
           </div>
 
           {listQuery.isPending ? (
-            <div className="state-message" role="status">
-              <span className="spinner large-spinner" aria-hidden="true" />
-              <strong>
-                {isScoreMode ? 'Scoring vacancies' : 'Loading vacancies'}
-              </strong>
-              <span>Fetching the latest results.</span>
-            </div>
+            <StateMessage
+              kind="loading"
+              title={isScoreMode ? 'Scoring vacancies' : 'Loading vacancies'}
+              text="Fetching the latest results."
+            />
           ) : listQuery.isError && rows.length === 0 ? (
-            <div className="state-message error-state" role="alert">
-              <span className="state-icon" aria-hidden="true">
-                !
-              </span>
-              <strong>Could not load vacancies</strong>
-              <span>
-                {listQuery.error instanceof Error
+            <StateMessage
+              kind="error"
+              title="Could not load vacancies"
+              text={
+                listQuery.error instanceof Error
                   ? listQuery.error.message
-                  : 'An unexpected error occurred.'}
-              </span>
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={handleRefresh}
-              >
-                Try again
-              </button>
-            </div>
+                  : 'An unexpected error occurred.'
+              }
+              action={{ label: 'Try again', onClick: handleRefresh }}
+            />
           ) : rows.length === 0 ? (
-            <div className="state-message">
-              <span className="state-icon empty-icon" aria-hidden="true">
-                0
-              </span>
-              <strong>
-                {!isScoreMode && page > 1
+            <StateMessage
+              kind="empty"
+              title={
+                !isScoreMode && page > 1
                   ? 'No vacancies on this page'
-                  : 'No vacancies found'}
-              </strong>
-              <span>
-                {isScoreMode
+                  : 'No vacancies found'
+              }
+              text={
+                isScoreMode
                   ? 'The selected profile has no scored vacancies.'
                   : page > 1
                     ? 'Return to the previous page.'
-                    : 'Try another category or reset the filters.'}
-              </span>
-              {!isScoreMode && page > 1 ? (
-                <button
-                  type="button"
-                  className="secondary-button"
-                  onClick={() => setPage(page - 1)}
-                >
-                  Previous page
-                </button>
-              ) : null}
-            </div>
+                    : 'Try another category or reset the filters.'
+              }
+              action={
+                !isScoreMode && page > 1
+                  ? { label: 'Previous page', onClick: () => setPage(page - 1) }
+                  : undefined
+              }
+            />
           ) : (
             <>
               {listQuery.isError ? (

@@ -1,6 +1,6 @@
 .profiles-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 15px;
   padding: 12px 0 0 12px;
   margin: -12px 0 0 -12px;
@@ -102,11 +102,11 @@
 .profile-card-menu-item svg {
   width: 18px;
   height: 18px;
-  fill: #d4b66f;
+  fill: var(--warning);
 }
 
 .profile-card-menu-item.is-danger {
-  color: #d2928d;
+  color: var(--danger);
 }
 
 .profile-card-confirm {
@@ -137,9 +137,9 @@
 }
 
 .profile-card-confirm-yes {
-  color: #d2928d;
-  border: 1px solid #70423f;
-  background: #291d1c;
+  color: var(--danger);
+  border: 1px solid var(--danger-border);
+  background: var(--danger-bg);
 }
 
 .profile-card-confirm-yes:hover {
@@ -161,7 +161,7 @@
 }
 
 .profile-card-clickable:hover {
-  border-color: #454b45;
+  border-color: var(--border-hover);
   background: var(--surface-hover);
 }
 
@@ -201,22 +201,16 @@
   letter-spacing: 0.02em;
 }
 
-.profile-status-ready {
-  border-color: rgb(40 122 71 / 45%);
-  color: #78b98e;
-  background: var(--accent-soft);
-}
-
 .profile-status-pending {
   border-color: rgb(177 137 49 / 40%);
-  color: #d4b66f;
+  color: var(--warning);
   background: rgb(177 137 49 / 12%);
 }
 
 .profile-status-failed {
-  border-color: #70423f;
-  color: #d2928d;
-  background: #291d1c;
+  border-color: var(--danger-border);
+  color: var(--danger);
+  background: var(--danger-bg);
 }
 
 .profile-directions {
@@ -238,7 +232,7 @@
 
 .profile-selected {
   display: grid;
-  color: #d4b66f;
+  color: var(--warning);
 }
 
 .profile-selected svg {
@@ -260,6 +254,11 @@
   box-shadow: 0 24px 80px rgb(0 0 0 / 48%);
 }
 
+.profile-modal[open] {
+  display: flex;
+  flex-direction: column;
+}
+
 .profile-modal::backdrop {
   background: rgb(6 8 6 / 76%);
   backdrop-filter: blur(3px);
@@ -267,6 +266,7 @@
 
 .profile-modal-heading {
   display: flex;
+  flex: none;
   align-items: center;
   justify-content: space-between;
   padding: 13px 20px;
@@ -291,20 +291,13 @@
   height: 22px;
   flex: 0 0 auto;
   place-items: center;
-  color: #d4b66f;
+  color: var(--warning);
 }
 
 .profile-modal-selected svg {
   width: 22px;
   height: 22px;
   fill: currentColor;
-}
-
-.profile-modal-heading p {
-  margin: 7px 0 0;
-  color: var(--text-muted);
-  font-size: 0.82rem;
-  line-height: 1.45;
 }
 
 .profile-modal-close {
@@ -327,7 +320,7 @@
 
 .profile-form {
   display: flex;
-  max-height: calc(100vh - 160px);
+  min-height: 0;
   flex-direction: column;
   gap: 18px;
   padding: 22px 24px 24px;
@@ -348,6 +341,22 @@
   color: var(--text-muted);
   font-size: 0.82rem;
   font-weight: 500;
+}
+
+.profile-form label small.profile-field-invalid {
+  color: var(--danger);
+}
+
+.profile-field-valid {
+  width: 16px;
+  height: 16px;
+  margin-left: 5px;
+  vertical-align: -3px;
+  fill: none;
+  stroke: var(--accent-hover);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .profile-form input,
@@ -381,7 +390,7 @@
 
 .profile-form input:hover,
 .profile-form textarea:hover {
-  border-color: #454b45;
+  border-color: var(--border-hover);
 }
 
 .profile-form textarea:focus-visible {
@@ -403,6 +412,7 @@
   justify-content: center;
   gap: 8px;
   padding: 48px 24px;
+  overflow-y: auto;
   color: var(--text-muted);
   text-align: center;
 }
@@ -419,6 +429,7 @@
 .profile-extract {
   display: flex;
   flex-direction: column;
+  min-height: 0;
   gap: 22px;
   padding: 22px 24px 24px;
   overflow-y: auto;
@@ -504,7 +515,7 @@
 }
 
 .profile-extract-spoiler summary:hover {
-  border-color: #454b45;
+  border-color: var(--border-hover);
   background: var(--surface-hover);
 }
 
@@ -566,7 +577,7 @@
 
 .profile-skill-depth-2 h3,
 .profile-skill-tag-2 {
-  color: #d4b66f;
+  color: var(--warning);
 }
 
 .profile-skill-tag-2 {
@@ -580,6 +591,6 @@
 }
 
 .profile-skill-tag-1 {
-  border-color: #454b45;
+  border-color: var(--border-hover);
   background: rgb(154 161 154 / 10%);
 }

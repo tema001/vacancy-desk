@@ -1,3 +1,4 @@
+import { timeZone } from '../../shared/format'
 import type { VacancySource } from './types'
 
 export const sourceLabels: Record<VacancySource, string> = {
@@ -6,8 +7,6 @@ export const sourceLabels: Record<VacancySource, string> = {
 }
 
 const numberFormatter = new Intl.NumberFormat('en-US')
-const timeZone =
-  Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Kyiv'
 
 const dateFormatter = new Intl.DateTimeFormat('en-US', {
   timeZone,
@@ -105,7 +104,7 @@ export function formatScore(score: number): string {
   return score.toFixed(2)
 }
 
-export function formatExperience(experienceInMonths: number): string {
+export function formatExperienceYears(experienceInMonths: number): string {
   const years = Math.floor(experienceInMonths / 12)
 
   if (years < 1) {

@@ -9,8 +9,6 @@ wheels/
 .venv
 
 # other
-.cursor/
-.claude/
 .idea/
 .other
 dist/
