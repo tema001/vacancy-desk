@@ -1,7 +1,13 @@
 import json
+import time
 from typing import Literal, NotRequired, assert_never
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import (
+    AIMessage,
+    HumanMessage,
+    SystemMessage,
+    ToolMessage,
+)
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import tool
@@ -132,6 +138,7 @@ async def agent(state: MessagesState) -> DataDict:
     ).bind_tools(tools)
 
     resp = await model.ainvoke([SystemMessage(prompts.MAIN_AGENT), *state['messages']])
+    resp.response_metadata['finished_at'] = time.time()
     return {'messages': [resp]}
 
 
@@ -172,7 +179,12 @@ async def capture_action(state: State, config: RunnableConfig) -> DataDict:
         )
 
     return {
-        'messages': [AIMessage('Are you sure you want to apply changes?')],
+        'messages': [
+            AIMessage(
+                'Are you sure you want to apply changes?',
+                response_metadata={'created_at': time.time()},
+            )
+        ],
         'action_info': {'id': action_id},
     }
 
@@ -181,7 +193,8 @@ def human_approval(state: State) -> DataDict:
     last_msg = state['messages'][-1]
     user_resp = interrupt(last_msg.content)
 
-    return {'messages': [HumanMessage(user_resp)]}
+    message = HumanMessage(user_resp, response_metadata={'created_at': time.time()})
+    return {'messages': [message]}
 
 
 async def interpret_approval(state: State) -> DataDict:
@@ -245,13 +258,14 @@ async def final_response(state: State) -> DataDict:
     )
     chain = messages | model
 
-    response = await chain.ainvoke(
+    resp = await chain.ainvoke(
         {
             **state['action_info'],
             'history': state['messages'],
         }
     )
-    return {'messages': [response], 'action_info': None}
+    resp.response_metadata['finished_at'] = time.time()
+    return {'messages': [resp], 'action_info': None}
 
 
 tools = [

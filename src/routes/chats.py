@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, status
+from fastapi.responses import StreamingResponse
 
 from src.ai_agent import utils
 from src.types import ChatMessageSchema, DataDict
@@ -16,10 +17,12 @@ async def create_chat() -> DataDict:
     return await utils.create_new_chat()
 
 
-@router.post('/api/chats/{chat_id}/messages')
-async def create_chat_message(chat_id: str, body: ChatMessageSchema) -> DataDict:
+@router.post('/api/chats/{chat_id}/messages/stream')
+async def stream_chat_message(chat_id: str, body: ChatMessageSchema) -> StreamingResponse:
     result = await utils.process_chat_message(chat_id, body.text)
     if result is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND)
 
-    return result
+    return StreamingResponse(
+        result, media_type='text/event-stream', headers={'Cache-Control': 'no-cache'}
+    )
