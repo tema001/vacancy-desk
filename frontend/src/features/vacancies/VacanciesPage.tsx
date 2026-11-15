@@ -125,6 +125,9 @@ export function VacanciesPage() {
             <a className="page-title-link" href="/app/profiles">
               Profiles
             </a>
+            <a className="page-title-link" href="/app/chat">
+              Chat
+            </a>
           </div>
           <div className="page-actions">
             <button
