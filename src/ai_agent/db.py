@@ -9,7 +9,6 @@ from src.types import DataDict
 
 CHAT_COLUMNS = (
     Chat.id,
-    Chat.awaiting_input,
     Chat.date_created,
     Chat.date_updated,
 )
@@ -32,6 +31,28 @@ async def select_thread_messages(
         LIMIT 1;
     """)
     return await select_one(conn, query.bindparams(thread_id=thread_id))
+
+
+async def select_thread_has_interrupt(conn: AsyncConnection, thread_id: str) -> bool:
+    query = sa.text("""
+        SELECT EXISTS (
+            SELECT 1
+            FROM checkpoint_writes w
+            WHERE w.thread_id = :thread_id
+              AND w.checkpoint_ns = ''
+              AND w.channel = '__interrupt__'
+              AND w.checkpoint_id = (
+                  SELECT c.checkpoint_id
+                  FROM checkpoints c
+                  WHERE c.thread_id = :thread_id
+                    AND c.checkpoint_ns = ''
+                  ORDER BY c.checkpoint_id DESC
+                  LIMIT 1
+              )
+        ) AS has_interrupt;
+    """)
+    row = await select_one(conn, query.bindparams(thread_id=thread_id))
+    return bool(row and row['has_interrupt'])
 
 
 async def insert_chat(conn: AsyncConnection) -> RowMapping:
@@ -65,14 +86,12 @@ async def delete_active_chats(conn: AsyncConnection) -> list[str]:
     return [row['id'] for row in rows]
 
 
-async def select_chat_awaiting_input(conn: AsyncConnection, chat_id: str) -> bool | None:
+async def select_chat_exists(conn: AsyncConnection, chat_id: str) -> bool:
     row = await select_one(
         conn,
-        stmt=sa.select(Chat.awaiting_input).where(
-            Chat.id == chat_id, Chat.date_deleted.is_(None)
-        ),
+        stmt=sa.select(Chat.id).where(Chat.id == chat_id, Chat.date_deleted.is_(None)),
     )
-    return row['awaiting_input'] if row else None
+    return row is not None
 
 
 async def update_chat(conn: AsyncConnection, chat_id: str, data: DataDict) -> None:

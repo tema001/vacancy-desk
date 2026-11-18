@@ -3,9 +3,10 @@ import { useState, type FormEvent, type KeyboardEvent } from 'react'
 interface ChatComposerProps {
   isStreaming: boolean
   onSend: (text: string) => void
+  onStop: () => void
 }
 
-export function ChatComposer({ isStreaming, onSend }: ChatComposerProps) {
+export function ChatComposer({ isStreaming, onSend, onStop }: ChatComposerProps) {
   const [text, setText] = useState('')
   const canSend = !isStreaming && text.trim() !== ''
 
@@ -40,20 +41,27 @@ export function ChatComposer({ isStreaming, onSend }: ChatComposerProps) {
         rows={1}
         autoFocus
       />
-      <button
-        type="submit"
-        className="chat-send-button"
-        disabled={!canSend}
-        aria-label={isStreaming ? 'Waiting for the reply' : 'Send message'}
-      >
-        {isStreaming ? (
-          <span className="spinner" aria-hidden="true" />
-        ) : (
+      {isStreaming ? (
+        <button
+          type="button"
+          className="chat-send-button is-stop"
+          onClick={onStop}
+          aria-label="Stop generating"
+        >
+          <span className="chat-stop-icon" aria-hidden="true" />
+        </button>
+      ) : (
+        <button
+          type="submit"
+          className="chat-send-button"
+          disabled={!canSend}
+          aria-label="Send message"
+        >
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M12 19V5m-6 6 6-6 6 6" />
           </svg>
-        )}
-      </button>
+        </button>
+      )}
     </form>
   )
 }

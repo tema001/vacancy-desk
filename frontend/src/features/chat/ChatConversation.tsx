@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { activeChatKey, createChat, streamChatMessage } from './api'
 import { ChatComposer } from './ChatComposer'
@@ -48,6 +48,7 @@ export function ChatConversation({ chatId, initialMessages }: ChatConversationPr
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
   const [isStreaming, setIsStreaming] = useState(false)
   const [sendError, setSendError] = useState<string | null>(null)
+  const abortRef = useRef<AbortController | null>(null)
   const queryClient = useQueryClient()
 
   // The new chat replaces the active one in the cache; ChatPage then remounts
@@ -69,9 +70,11 @@ export function ChatConversation({ chatId, initialMessages }: ChatConversationPr
     ])
     setIsStreaming(true)
     setSendError(null)
+    const controller = new AbortController()
+    abortRef.current = controller
     let isDone = false
     try {
-      for await (const event of streamChatMessage(chatId, text)) {
+      for await (const event of streamChatMessage(chatId, text, controller.signal)) {
         if (event.event === 'token') {
           setMessages((current) => appendToLastMessage(current, event.text))
         } else if (event.event === 'interrupt') {
@@ -88,12 +91,27 @@ export function ChatConversation({ chatId, initialMessages }: ChatConversationPr
         throw new Error('The reply was interrupted. Try again.')
       }
     } catch (error) {
-      setSendError(error instanceof Error ? error.message : 'Could not send message')
+      if (controller.signal.aborted) {
+        setMessages((current) => setTurnCreatedAt(current, turnStart, Date.now() / 1000))
+      } else {
+        setSendError(error instanceof Error ? error.message : 'Could not send message')
+      }
     } finally {
+      abortRef.current = null
       setMessages(dropEmptyLastMessage)
       setIsStreaming(false)
     }
   }
+
+  function handleStop(): void {
+    abortRef.current?.abort()
+  }
+
+  // Effect is needed: leaving the page must close the open stream, otherwise the
+  // backend keeps generating a reply nobody will see.
+  useEffect(() => {
+    return () => abortRef.current?.abort()
+  }, [])
 
   return (
     <>
@@ -116,7 +134,11 @@ export function ChatConversation({ chatId, initialMessages }: ChatConversationPr
 
       <ChatMessageList messages={messages} isStreaming={isStreaming} />
 
-      <ChatComposer isStreaming={isStreaming} onSend={(text) => void handleSend(text)} />
+      <ChatComposer
+        isStreaming={isStreaming}
+        onSend={(text) => void handleSend(text)}
+        onStop={handleStop}
+      />
     </>
   )
 }

@@ -200,8 +200,6 @@ class Chat(Base):
         primary_key=True,
         server_default=text('uuidv7()'),
     )
-    awaiting_input: Mapped[bool] = mapped_column(default=False)
-
     date_created: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=func.now()
     )

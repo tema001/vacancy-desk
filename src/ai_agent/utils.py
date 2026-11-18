@@ -19,7 +19,6 @@ _serde = JsonPlusSerializer()
 def _get_chat_response(chat: Mapping[Any, Any]) -> DataDict:
     return {
         'id': chat['id'],
-        'awaiting_input': chat['awaiting_input'],
         'date_created': chat['date_created'].isoformat(),
         'date_updated': chat['date_updated'].isoformat(),
     }
@@ -82,10 +81,10 @@ def _human_message(text: str) -> HumanMessage:
 
 async def process_chat_message(chat_id: str, text: str) -> AsyncIterator[str] | None:
     async with resources.engine.connect() as conn:
-        await_input = await db.select_chat_awaiting_input(conn, chat_id)
+        if not await db.select_chat_exists(conn, chat_id):
+            return None
 
-    if await_input is None:
-        return None
+        await_input = await db.select_thread_has_interrupt(conn, chat_id)
 
     return stream_chat_message(chat_id, text, awaiting_input=await_input)
 
@@ -121,12 +120,8 @@ async def stream_chat_message(
         yield sse_format('error', payload={'text': 'Something went wrong. Try again.'})
         return
 
-    data: DataDict = {'date_updated': dt_now()}
-    if need_awaiting != awaiting_input:
-        data['awaiting_input'] = need_awaiting
-
     async with resources.engine.begin() as conn:
-        await db.update_chat(conn, chat_id, data)
+        await db.update_chat(conn, chat_id, data={'date_updated': dt_now()})
 
     yield sse_format(
         'done', payload={'awaiting_input': need_awaiting, 'created_at': time.time()}

@@ -9,7 +9,6 @@ export interface ChatMessage {
 
 export interface ActiveChat {
   id: string
-  awaiting_input: boolean
   date_created: string
   date_updated: string
 }

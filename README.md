@@ -97,5 +97,6 @@ Known limitations and what I plan to do about them:
 
 - [ ] **Move BM25 into Postgres with `pg_search`.** Right now BM25 is scored in Python over candidates that Postgres preselects by token overlap, without a dedicated full-text index. This works on the current data volume but will not scale. Plan: index vacancies with `pg_search` and let Postgres return BM25 scores directly.
 - [ ] **Grow the eval set.** The search evals run on only 2 hand-labeled queries, which is enough to catch regressions but not to compare ranking changes with confidence. Plan: label more queries with a bigger dataset.
-- [ ] **UI for the AI chat.** The agent is only reachable through the REST API, so trying it out needs Swagger or curl. Plan: add a chat page to the React app, including a view of the proposed profile change for the approval step.
+- [x] **UI for the AI chat.** The agent was only reachable through the REST API, so trying it out needed Swagger or curl. Done: a chat page in the React app (`/app/chat`) with replies streamed over SSE, chat history, a stop button, and the approval question shown in the chat.
 - [ ] **Configurable feeds.** The feed source and the polled category are hardcoded. Plan: move sources and categories into configuration, so the pipeline polls exactly the services and categories that are set up there.
+- [ ] **Vacancy extraction v3.** Plan: rework the extraction pipeline (`extract_vacancy`).
