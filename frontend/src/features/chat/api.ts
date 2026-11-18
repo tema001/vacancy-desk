@@ -45,11 +45,13 @@ function parseStreamEvent(block: string): ChatStreamEvent | null {
 export async function* streamChatMessage(
   chatId: string,
   text: string,
+  signal: AbortSignal,
 ): AsyncGenerator<ChatStreamEvent> {
-  const response = await fetch(
-    `/api/chats/${chatId}/messages/stream`,
-    jsonInit('POST', { text }),
-  )
+  // Aborting the signal closes the connection; the backend then cancels the graph run.
+  const response = await fetch(`/api/chats/${chatId}/messages/stream`, {
+    ...jsonInit('POST', { text }),
+    signal,
+  })
   if (!response.ok) {
     throw await toResponseError(response, 'Could not send message')
   }

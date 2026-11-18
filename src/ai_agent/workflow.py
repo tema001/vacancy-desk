@@ -4,6 +4,7 @@ from typing import Literal, NotRequired, assert_never
 
 from langchain_core.messages import (
     AIMessage,
+    AnyMessage,
     HumanMessage,
     SystemMessage,
     ToolMessage,
@@ -128,6 +129,25 @@ async def search_vacancies(params: AgentHybridSearch) -> DataDict:
     return resp
 
 
+def _answer_cancelled_tool_calls(messages: list[AnyMessage]) -> list[AnyMessage]:
+    answered = {m.tool_call_id for m in messages if isinstance(m, ToolMessage)}
+    result: list[AnyMessage] = []
+    for message in messages:
+        result.append(message)
+        if not isinstance(message, AIMessage):
+            continue
+
+        for call in message.tool_calls:
+            if call['id'] not in answered:
+                result.append(
+                    ToolMessage(
+                        'Cancelled by the user before it finished.',
+                        tool_call_id=call['id'],
+                    )
+                )
+    return result
+
+
 async def agent(state: MessagesState) -> DataDict:
     model = ChatOpenAI(
         model='gpt-6-luna',
@@ -137,7 +157,9 @@ async def agent(state: MessagesState) -> DataDict:
         root_async_client=resources.llm,
     ).bind_tools(tools)
 
-    resp = await model.ainvoke([SystemMessage(prompts.MAIN_AGENT), *state['messages']])
+    history = _answer_cancelled_tool_calls(state['messages'])
+
+    resp = await model.ainvoke([SystemMessage(prompts.MAIN_AGENT), *history])
     resp.response_metadata['finished_at'] = time.time()
     return {'messages': [resp]}
 
@@ -206,7 +228,8 @@ async def interpret_approval(state: State) -> DataDict:
         root_async_client=resources.llm,
     ).with_structured_output(ApprovalAnswer)
 
-    resp = await model.ainvoke([SystemMessage(prompts.INTERPRET), *state['messages']])
+    history = _answer_cancelled_tool_calls(state['messages'])
+    resp = await model.ainvoke([SystemMessage(prompts.INTERPRET), *history])
     resp = ApprovalAnswer.model_validate(resp)
 
     return {'decision': resp.answer}
@@ -261,7 +284,7 @@ async def final_response(state: State) -> DataDict:
     resp = await chain.ainvoke(
         {
             **state['action_info'],
-            'history': state['messages'],
+            'history': _answer_cancelled_tool_calls(state['messages']),
         }
     )
     resp.response_metadata['finished_at'] = time.time()

@@ -345,6 +345,24 @@
   background: var(--surface-hover);
 }
 
+.chat-send-button.is-stop {
+  border: 1px solid var(--border);
+  color: var(--text);
+  background: var(--surface-raised);
+}
+
+.chat-send-button.is-stop:hover {
+  border-color: var(--border-hover);
+  background: var(--surface-hover);
+}
+
+.chat-stop-icon {
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+  background: currentColor;
+}
+
 .chat-send-button svg {
   width: 18px;
   height: 18px;
