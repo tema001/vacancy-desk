@@ -3,6 +3,8 @@ from typing import Any
 
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
+    CheckConstraint,
+    ColumnElement,
     Computed,
     DateTime,
     ForeignKey,
@@ -24,8 +26,10 @@ from src.enums import (
     JobFamily,
     ProfileStatus,
     Seniority,
+    SkillAliasStatus,
     SkillDepth,
     SkillKind,
+    SkillLexiconStatus,
     Source,
     VacancyStatus,
 )
@@ -34,6 +38,10 @@ from src.shared.types import SmallIntEnum
 
 class Base(DeclarativeBase):
     pass
+
+
+def _normalized(column: Any) -> ColumnElement[Any]:
+    return func.trim(func.regexp_replace(func.lower(column), r'[/_.\-]+', ' ', 'g'))
 
 
 class Vacancy(Base):
@@ -137,19 +145,48 @@ class VacancyChunk(Base):
 
 class SkillLexicon(Base):
     __tablename__ = 'skill_lexicon'
+    __table_args__ = (
+        UniqueConstraint('skill_name_norm', name='uq_skill_lexicon_skill_name_norm'),
+    )
 
     skill_name: Mapped[str] = mapped_column(Text, primary_key=True)
     skill_name_norm: Mapped[str] = mapped_column(
-        Computed(
-            func.trim(func.regexp_replace(func.lower(skill_name), r'[/_.\-]+', ' ', 'g')),
-            persisted=True,
-        )
+        Computed(_normalized(skill_name), persisted=True)
     )
 
     kind: Mapped[SkillKind] = mapped_column(SmallIntEnum(SkillKind))
+    # null = canonical skill
+    status: Mapped[SkillLexiconStatus | None] = mapped_column(
+        SmallIntEnum(SkillLexiconStatus)
+    )
     expanded: Mapped[str | None]
     expanded_vector: Mapped[list[float] | None] = mapped_column(Vector(1536))
     embedding_model: Mapped[str | None]
+
+    date_created: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=func.now()
+    )
+
+
+class SkillAlias(Base):
+    __tablename__ = 'skill_alias'
+    __table_args__ = (
+        CheckConstraint(
+            '(skill_name IS NOT NULL) = (status = 1)',
+            name='ck_skill_alias_skill_name_iff_alias',
+        ),
+    )
+
+    alias_name: Mapped[str] = mapped_column(Text)
+    alias_name_norm: Mapped[str] = mapped_column(
+        Text, Computed(_normalized(alias_name), persisted=True), primary_key=True
+    )
+    skill_name: Mapped[str | None] = mapped_column(
+        ForeignKey('skill_lexicon.skill_name', onupdate='CASCADE', ondelete='CASCADE')
+    )
+    status: Mapped[SkillAliasStatus] = mapped_column(SmallIntEnum(SkillAliasStatus))
+    seen_count: Mapped[int] = mapped_column(default=0)
+    is_reviewed: Mapped[bool] = mapped_column(default=False)
 
     date_created: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=func.now()

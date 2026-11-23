@@ -19,7 +19,8 @@ async def db(init_resources):
         await conn.execute(
             sa.text(
                 'TRUNCATE vacancy_skills, vacancy_extract, vacancies_activity,'
-                ' vacancies, skill_lexicon RESTART IDENTITY CASCADE'
+                ' vacancies, skill_lexicon, skill_alias, profiles'
+                ' RESTART IDENTITY CASCADE'
             )
         )
 

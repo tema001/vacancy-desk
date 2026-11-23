@@ -11,6 +11,7 @@ from src.enums import ProfileStatus, VacancyStatus
 from src.models import (
     Profile,
     ProfileSkill,
+    SkillAlias,
     SkillLexicon,
     VacanciesActivity,
     Vacancy,
@@ -471,9 +472,53 @@ async def delete_vacancy_extract(conn: AsyncConnection, vacancy_id: str) -> None
     )
 
 
+async def select_skill_resolutions(
+    conn: AsyncConnection, data: Sequence[str]
+) -> dict[str, str | None]:
+    """
+    Returns the known ones: normalized name -> skill_lexicon name (a row of any status
+    or the target of an alias), None if the name was rejected earlier.
+    """
+    if not data:
+        return {}
+
+    q = (
+        sa.values(sa.column('s_norm', sa.Text), name='q')
+        .data([(norm,) for norm in data])
+        .cte('q')
+    )
+
+    rows = await select_all(
+        conn,
+        stmt=(
+            sa.select(
+                q.c.s_norm,
+                # a rejected alias has no skill_name
+                func.coalesce(SkillLexicon.skill_name, SkillAlias.skill_name).label(
+                    'skill_name'
+                ),
+            )
+            .select_from(q)
+            .outerjoin(SkillLexicon, SkillLexicon.skill_name_norm == q.c.s_norm)
+            .outerjoin(SkillAlias, SkillAlias.alias_name_norm == q.c.s_norm)
+            .where(
+                sa.or_(
+                    SkillLexicon.skill_name.isnot(None),
+                    SkillAlias.alias_name_norm.isnot(None),
+                )
+            )
+        ),
+    )
+    return {row['s_norm']: row['skill_name'] for row in rows}
+
+
 async def select_skill_lexicon_matches(
     conn: AsyncConnection, data: Sequence[str]
-) -> Sequence[RowMapping]:
+) -> dict[str, str]:
+    """Normalized name -> canonical skill with nearly the same spelling."""
+    if not data:
+        return {}
+
     q = (
         sa.values(sa.column('s_norm', sa.Text), name='q')
         .data([(name,) for name in data])
@@ -486,76 +531,70 @@ async def select_skill_lexicon_matches(
         'english', q.c.s_norm
     )
     trgm_similar = func.similarity(sl_n, q.c.s_norm)
-    len_abs = func.abs(func.length(sl_n) - func.length(q.c.s_norm))
     # pg_trgm and to_tsvector drop '+'/'#', so fuzzy-match only plain names
     has_mark = sl_n.op('~')('[+#]') | q.c.s_norm.op('~')('[+#]')
 
     lat = (
-        sa.select(
-            SkillLexicon.skill_name,
-            trgm_similar.label('trgm_similar'),
-        )
-        .select_from(SkillLexicon)
+        sa.select(SkillLexicon.skill_name)
         .where(
-            sa.or_(
-                sl_n == q.c.s_norm,
-                sa.and_(
-                    ~has_mark,
-                    sa.or_(
-                        sa.and_(same_stems, trgm_similar >= 0.75),
-                        sa.and_(len_abs <= 4, trgm_similar >= 0.61),
-                    ),
-                ),
-            )
+            SkillLexicon.status.is_(None),
+            ~has_mark,
+            same_stems,
+            trgm_similar >= 0.75,
         )
-        .order_by(same_stems.desc(), trgm_similar.desc())
+        .order_by(trgm_similar.desc())
         .limit(1)
         .lateral()
     )
 
-    return await select_all(
-        conn,
-        stmt=(
-            sa.select(q.c.s_norm, lat.c.skill_name, lat.c.trgm_similar)
-            .select_from(q)
-            .join(lat, sa.true())
-        ),
-    )
-
-
-async def select_new_skill_lexicon(
-    conn: AsyncConnection, data: Sequence[str]
-) -> list[str]:
-    q = (
-        sa.values(sa.column('skill_name', sa.Text), name='q')
-        .data([(name,) for name in data])
-        .cte('q')
-    )
     rows = await select_all(
         conn,
-        stmt=(
-            sa.select(q.c.skill_name).where(
-                ~sa.exists().where(SkillLexicon.skill_name == q.c.skill_name)
-            )
-        ),
+        stmt=sa.select(q.c.s_norm, lat.c.skill_name).select_from(q).join(lat, sa.true()),
     )
-
-    if not rows:
-        return []
-
-    return [row['skill_name'] for row in rows]
+    return {row['s_norm']: row['skill_name'] for row in rows}
 
 
 async def insert_skill_lexicon(
     conn: AsyncConnection, data: DataDict | list[DataDict]
 ) -> None:
+    if not data:
+        return
+
     await conn.execute(
         statement=(
             insert(SkillLexicon)
             .values(data)
             # several workers can insert the same skill at the same time
-            .on_conflict_do_nothing(index_elements=['skill_name'])
+            .on_conflict_do_nothing()
         ),
+    )
+
+
+async def insert_skill_alias(
+    conn: AsyncConnection, data: DataDict | list[DataDict]
+) -> None:
+    if not data:
+        return
+
+    await conn.execute(
+        statement=(
+            insert(SkillAlias)
+            .values(data)
+            .on_conflict_do_nothing(index_elements=['alias_name_norm'])
+        ),
+    )
+
+
+async def increase_skill_alias_seen_count(
+    conn: AsyncConnection, data: Sequence[str]
+) -> None:
+    if not data:
+        return
+
+    await conn.execute(
+        sa.update(SkillAlias)
+        .where(SkillAlias.alias_name_norm.in_(data))
+        .values(seen_count=SkillAlias.seen_count + 1)
     )
 
 
@@ -564,7 +603,10 @@ async def select_skill_lexicon_for_expand(conn: AsyncConnection, limit: int) -> 
         conn,
         stmt=(
             sa.select(SkillLexicon.skill_name)
-            .where(SkillLexicon.expanded.is_(None))
+            .where(
+                SkillLexicon.expanded.is_(None),
+                SkillLexicon.status.is_(None),
+            )
             .limit(limit + 1)
             .order_by(SkillLexicon.date_created)
         ),

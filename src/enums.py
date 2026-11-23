@@ -70,3 +70,12 @@ class ProfileStatus(IntEnum):
 
 class ChatActionType(IntEnum):
     update_profile = 1
+
+
+class SkillLexiconStatus(IntEnum):
+    pending = 1
+
+
+class SkillAliasStatus(IntEnum):
+    alias = 1
+    rejected = 2
