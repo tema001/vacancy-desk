@@ -16,7 +16,14 @@ from procrastinate.exceptions import AlreadyEnqueued
 from sqlalchemy.ext.asyncio.engine import AsyncConnection
 
 import src.db as db
-from src.enums import EnglishLevel, ProfileStatus, Source, VacancyStatus
+from src.enums import (
+    EnglishLevel,
+    ProfileStatus,
+    SkillAliasStatus,
+    SkillLexiconStatus,
+    Source,
+    VacancyStatus,
+)
 from src.geo import canonicalize
 from src.seniority import seniority_from_title
 from src.shared.resources import resources
@@ -273,49 +280,74 @@ async def process_vacancy_page(job: ParseJob) -> None:
 async def _sync_skills_into_lexicon[T: SkillExtract](
     conn: AsyncConnection, skills: list[T]
 ) -> list[T]:
+    extracted_skills: dict[str, T] = {}  # normalized name -> skill
     for skill in skills:
-        name = skill.canonical
-        skill.canonical = name[:1].upper() + name[1:]
+        norm = skill.normalized
+        if norm:
+            existing = extracted_skills.get(norm)
+            extracted_skills[norm] = existing.prefer(skill) if existing else skill
 
-    missing_names = set(
-        await db.select_new_skill_lexicon(
-            conn, data=[skill.canonical for skill in skills]
-        )
+    if not extracted_skills:
+        return []
+
+    known = await db.select_skill_resolutions(conn, data=list(extracted_skills))
+    unknown = [norm for norm in extracted_skills if norm not in known]
+
+    similar = await db.select_skill_lexicon_matches(conn, data=unknown)
+    new = {
+        norm: extracted_skills[norm].canonical for norm in unknown if norm not in similar
+    }
+
+    await db.increase_skill_alias_seen_count(
+        conn, data=[norm for norm, name in known.items() if name is None]
     )
-    if missing_names:
-        new_skills = [s for s in skills if s.canonical in missing_names]
-        rows = await db.select_skill_lexicon_matches(
-            conn, data=[skill.normalized for skill in new_skills]
-        )
-        print('Matched lexicon', rows)
+    await db.insert_skill_alias(
+        conn,
+        data=[
+            {
+                'alias_name': extracted_skills[norm].canonical,
+                'skill_name': name,
+                'status': SkillAliasStatus.alias,
+            }
+            for norm, name in similar.items()
+        ],
+    )
+    await db.insert_skill_lexicon(
+        conn,
+        data=[
+            {
+                'skill_name': name,
+                'kind': extracted_skills[norm].kind,
+                'status': SkillLexiconStatus.pending,
+            }
+            for norm, name in new.items()
+        ],
+    )
+    # another worker could save the same skill first under another spelling
+    # take the names from DB
+    saved = await db.select_skill_resolutions(conn, data=list(new))
 
-        matched: dict[str, str] = {
-            str(row['s_norm']): str(row['skill_name']) for row in rows
-        }
-        lexicon_data = [
-            {'skill_name': skill.canonical, 'kind': skill.kind}
-            for skill in new_skills
-            if skill.normalized not in matched
-        ]
-        if lexicon_data:
-            await db.insert_skill_lexicon(conn, lexicon_data)
+    resolved_skills: dict[str, T] = {}  # skill_lexicon name -> skill
+    for norm, name in (known | similar | saved).items():
+        if name is None:  # rejected earlier
+            continue
 
-        for skill in new_skills:
-            canonical = matched.get(skill.normalized)
-            if canonical is not None:
-                skill.canonical = canonical
+        skill = extracted_skills[norm]
+        skill.canonical = name
 
-    uq_skills: dict[str, T] = {}
-    for skill in skills:
-        existing = uq_skills.get(skill.canonical)
-        uq_skills[skill.canonical] = existing.prefer(skill) if existing else skill
-    return list(uq_skills.values())
+        existing = resolved_skills.get(name)
+        resolved_skills[name] = existing.prefer(skill) if existing else skill
+
+    return list(resolved_skills.values())
 
 
 async def _add_vacancy_skill_and_lexicon(
     conn: AsyncConnection, vacancy_id: str, skills: list[VacancySkillExtract]
 ) -> None:
     skills_ = await _sync_skills_into_lexicon(conn, skills)
+    if not skills_:
+        return
+
     await db.insert_vacancy_skills(
         conn,
         data=[
@@ -334,6 +366,9 @@ async def _add_profile_skill_and_lexicon(
     conn: AsyncConnection, profile_id: str, skills: list[SkillExtract]
 ) -> None:
     skills_ = await _sync_skills_into_lexicon(conn, skills)
+    if not skills_:
+        return
+
     await db.insert_profile_skills(
         conn,
         data=[

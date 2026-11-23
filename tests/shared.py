@@ -9,8 +9,19 @@ import sqlalchemy as sa
 import src.db as vacancy_db
 from sqlalchemy.engine.result import RowMapping
 from sqlalchemy.ext.asyncio.engine import AsyncConnection
-from src.enums import EnglishLevel, JobFamily, Seniority, SkillKind, Source, VacancyStatus
+from src.enums import (
+    EnglishLevel,
+    JobFamily,
+    Seniority,
+    SkillAliasStatus,
+    SkillKind,
+    SkillLexiconStatus,
+    Source,
+    VacancyStatus,
+)
 from src.models import (
+    ProfileSkill,
+    SkillAlias,
     SkillLexicon,
     VacanciesActivity,
     Vacancy,
@@ -152,9 +163,54 @@ async def prepare_skill_lexicon(
     skill_name: str,
     *,
     kind: SkillKind = SkillKind.hard,
+    status: SkillLexiconStatus | None = None,
 ) -> None:
     await vacancy_db.insert_skill_lexicon(
-        conn, data={'skill_name': skill_name, 'kind': kind}
+        conn, data={'skill_name': skill_name, 'kind': kind, 'status': status}
+    )
+
+
+async def prepare_skill_alias(
+    conn: AsyncConnection,
+    alias_name: str,
+    status: SkillAliasStatus,
+    *,
+    skill_name: str | None = None,
+    is_reviewed: bool = False,
+    seen_count: int = 0,
+) -> None:
+    await vacancy_db.insert_skill_alias(
+        conn,
+        data={
+            'alias_name': alias_name,
+            'skill_name': skill_name,
+            'status': status,
+            'is_reviewed': is_reviewed,
+            'seen_count': seen_count,
+        },
+    )
+
+
+async def prepare_profile(conn: AsyncConnection) -> str:
+    return await vacancy_db.insert_new_profile(conn, data={'name': 'test', 'text': 'cv'})
+
+
+async def select_alias_rows(conn: AsyncConnection) -> Sequence[RowMapping]:
+    return await vacancy_db.select_all(
+        conn, stmt=sa.select(SkillAlias).order_by(SkillAlias.alias_name_norm)
+    )
+
+
+async def select_profile_skill_rows(
+    conn: AsyncConnection, profile_id: str
+) -> Sequence[RowMapping]:
+    return await vacancy_db.select_all(
+        conn,
+        stmt=(
+            sa.select(ProfileSkill)
+            .where(ProfileSkill.profile_id == profile_id)
+            .order_by(ProfileSkill.skill_name)
+        ),
     )
 
 
