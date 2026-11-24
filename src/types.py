@@ -1,8 +1,8 @@
 import hashlib
-import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime
+from enum import StrEnum
 from functools import cached_property
 from typing import Annotated, Any, Self
 
@@ -14,10 +14,11 @@ from src.enums import (
     Seniority,
     SkillDepth,
     SkillKind,
+    SkillLexiconStatus,
     VacancyStatus,
 )
 from src.shared.types import EnumField
-from src.shared.utils import dt_now
+from src.shared.utils import dt_now, normalize_skill_name
 
 type DataDict = dict[str, Any]
 
@@ -75,7 +76,7 @@ class SkillExtract(BaseModel):
 
     @cached_property
     def normalized(self) -> str:
-        return re.sub(r'[/_.\-]+', ' ', self.canonical.lower()).strip()
+        return normalize_skill_name(self.canonical)
 
     def prefer(self, other: Self) -> Self:
         return other if other.depth > self.depth else self
@@ -117,6 +118,22 @@ class LexiconItem(BaseModel):
 
 class LexiconExpand(BaseModel):
     items: list[LexiconItem]
+
+
+class JudgeVerdict(StrEnum):
+    new = 'new'
+    alias = 'alias'
+    rejected = 'rejected'
+
+
+class JudgeItem(BaseModel):
+    skill_name: str
+    verdict: str
+    canonical: str | None = None
+
+
+class LexiconJudge(BaseModel):
+    items: list[JudgeItem]
 
 
 @dataclass
@@ -221,6 +238,17 @@ class ParseJob:
             params_hash=row['params_hash'],
             desc_hash=row['description_hash'],
         )
+
+
+@dataclass(slots=True)
+class LexiconSkill:
+    skill_name: str
+    status: SkillLexiconStatus | None
+    is_rejected: bool = False
+
+    @property
+    def is_canonical(self) -> bool:
+        return self.status is None and not self.is_rejected
 
 
 @dataclass(slots=True)

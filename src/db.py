@@ -1,3 +1,4 @@
+from collections import defaultdict
 from collections.abc import Iterable, Iterator, Sequence
 from datetime import datetime, timedelta
 
@@ -5,9 +6,15 @@ import sqlalchemy as sa
 from sqlalchemy.dialects.postgresql import ARRAY, insert
 from sqlalchemy.engine import RowMapping
 from sqlalchemy.ext.asyncio.engine import AsyncConnection
+from sqlalchemy.orm import aliased
 from sqlalchemy.sql import Executable, asc, desc, func
 
-from src.enums import ProfileStatus, VacancyStatus
+from src.enums import (
+    ProfileStatus,
+    SkillAliasStatus,
+    SkillLexiconStatus,
+    VacancyStatus,
+)
 from src.models import (
     Profile,
     ProfileSkill,
@@ -19,7 +26,13 @@ from src.models import (
     VacancyExtract,
     VacancySkill,
 )
-from src.types import DataDict, HybridSearchSchema, ParamsSchema, ScoringProfile
+from src.types import (
+    DataDict,
+    HybridSearchSchema,
+    LexiconSkill,
+    ParamsSchema,
+    ScoringProfile,
+)
 
 TOKEN_RE = r'[a-z0-9]+(?:[+#]+|\.[a-z0-9]+|-[a-z0-9]+)*'  # noqa: S105
 
@@ -476,8 +489,8 @@ async def select_skill_resolutions(
     conn: AsyncConnection, data: Sequence[str]
 ) -> dict[str, str | None]:
     """
-    Returns the known ones: normalized name -> skill_lexicon name (a row of any status
-    or the target of an alias), None if the name was rejected earlier.
+    Returns the known ones: normalized name -> skill_lexicon name,
+    None if the name was rejected earlier.
     """
     if not data:
         return {}
@@ -580,7 +593,10 @@ async def insert_skill_alias(
         statement=(
             insert(SkillAlias)
             .values(data)
-            .on_conflict_do_nothing(index_elements=['alias_name_norm'])
+            .on_conflict_do_update(
+                index_elements=['alias_name_norm'],
+                set_={'seen_count': SkillAlias.seen_count + 1},
+            )
         ),
     )
 
@@ -676,6 +692,171 @@ async def update_skill_lexicon_embed(
     ]
 
     await conn.execute(stmt, b_data)
+
+
+async def select_pending_skill_names(conn: AsyncConnection, limit: int) -> list[str]:
+    rows = await select_all(
+        conn,
+        stmt=(
+            sa.select(SkillLexicon.skill_name)
+            .where(SkillLexicon.status == SkillLexiconStatus.pending)
+            .order_by(SkillLexicon.date_created, SkillLexicon.skill_name)
+            .limit(limit + 1)
+        ),
+    )
+    return [row['skill_name'] for row in rows]
+
+
+async def select_vacancy_titles_for_skills(
+    conn: AsyncConnection, skill_names: Sequence[str], per_skill: int = 3
+) -> dict[str, list[str]]:
+    if not skill_names:
+        return {}
+
+    distinct_titles = (
+        sa.select(VacancySkill.skill_name, Vacancy.title)
+        .select_from(VacancySkill)
+        .join(Vacancy, Vacancy.id == VacancySkill.vacancy_id)
+        .where(VacancySkill.skill_name.in_(skill_names))
+        .distinct()
+    ).cte('distinct_titles')
+
+    numbered = sa.select(
+        distinct_titles.c.skill_name,
+        distinct_titles.c.title,
+        func.row_number()
+        .over(
+            partition_by=distinct_titles.c.skill_name,
+            order_by=distinct_titles.c.title,
+        )
+        .label('rn'),
+    ).cte('numbered_titles')
+
+    rows = await select_all(
+        conn,
+        stmt=(
+            sa.select(numbered.c.skill_name, numbered.c.title)
+            .where(numbered.c.rn <= per_skill)
+            .order_by(numbered.c.skill_name, numbered.c.rn)
+        ),
+    )
+
+    result = defaultdict(list)
+    for row in rows:
+        result[row['skill_name']].append(row['title'])
+    return result
+
+
+async def select_canonical_skill_names(conn: AsyncConnection) -> list[str]:
+    rows = await select_all(
+        conn,
+        stmt=(
+            sa.select(SkillLexicon.skill_name)
+            .where(SkillLexicon.status.is_(None))
+            .order_by(SkillLexicon.skill_name)
+        ),
+    )
+    return [row['skill_name'] for row in rows]
+
+
+async def select_skill_by_norm(conn: AsyncConnection, norm: str) -> LexiconSkill | None:
+    row = await select_one(
+        conn,
+        stmt=sa.select(SkillLexicon.skill_name, SkillLexicon.status).where(
+            SkillLexicon.skill_name_norm == norm
+        ),
+    )
+    if row:
+        return LexiconSkill(skill_name=row['skill_name'], status=row['status'])
+
+    # an alias gives its canonical skill, a rejected alias has none
+    row = await select_one(
+        conn,
+        stmt=(
+            sa.select(
+                SkillAlias.alias_name,
+                SkillAlias.status.label('alias_status'),
+                SkillLexicon.skill_name,
+                SkillLexicon.status,
+            )
+            .outerjoin(SkillLexicon, SkillLexicon.skill_name == SkillAlias.skill_name)
+            .where(SkillAlias.alias_name_norm == norm)
+        ),
+    )
+    if not row:
+        return None
+
+    if row['alias_status'] == SkillAliasStatus.rejected:
+        return LexiconSkill(skill_name=row['alias_name'], status=None, is_rejected=True)
+
+    return LexiconSkill(skill_name=row['skill_name'], status=row['status'])
+
+
+SKILL_LEXICON_LOCK = 7_402_001
+
+
+async def lock_skill_lexicon_shared(conn: AsyncConnection) -> None:
+    await conn.execute(sa.select(func.pg_advisory_xact_lock_shared(SKILL_LEXICON_LOCK)))
+
+
+async def lock_skill_lexicon(conn: AsyncConnection) -> None:
+    await conn.execute(sa.select(func.pg_advisory_xact_lock(SKILL_LEXICON_LOCK)))
+
+
+async def accept_pending_skill_lexicon(
+    conn: AsyncConnection, skill_name: str, new_name: str
+) -> None:
+    await conn.execute(
+        sa.update(SkillLexicon)
+        .where(
+            SkillLexicon.skill_name == skill_name,
+            SkillLexicon.status == SkillLexiconStatus.pending,
+        )
+        .values(skill_name=new_name, status=None)
+    )
+
+
+async def delete_pending_skill_lexicon(conn: AsyncConnection, skill_name: str) -> None:
+    await conn.execute(
+        sa.delete(SkillLexicon).where(
+            SkillLexicon.skill_name == skill_name,
+            SkillLexicon.status == SkillLexiconStatus.pending,
+        )
+    )
+
+
+async def rename_vacancy_skill(
+    conn: AsyncConnection, from_name: str, to_name: str
+) -> None:
+    target = aliased(VacancySkill)
+    await conn.execute(
+        sa.update(VacancySkill)
+        .where(
+            VacancySkill.skill_name == from_name,
+            ~sa.exists().where(
+                target.skill_name == to_name,
+                target.vacancy_id == VacancySkill.vacancy_id,
+            ),
+        )
+        .values(skill_name=to_name)
+    )
+
+
+async def rename_profile_skill(
+    conn: AsyncConnection, from_name: str, to_name: str
+) -> None:
+    target = aliased(ProfileSkill)
+    await conn.execute(
+        sa.update(ProfileSkill)
+        .where(
+            ProfileSkill.skill_name == from_name,
+            ~sa.exists().where(
+                target.skill_name == to_name,
+                target.profile_id == ProfileSkill.profile_id,
+            ),
+        )
+        .values(skill_name=to_name)
+    )
 
 
 async def insert_vacancy_skills(
