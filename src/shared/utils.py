@@ -1,3 +1,4 @@
+import re
 from datetime import datetime
 from enum import IntEnum
 from typing import Any
@@ -15,3 +16,7 @@ def enum_name(value: Any) -> str | None:
     if isinstance(value, IntEnum):
         return value.name
     return None
+
+
+def normalize_skill_name(name: str) -> str:
+    return re.sub(r'[/_.\-]+', ' ', name.lower()).strip()

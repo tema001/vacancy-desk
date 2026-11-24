@@ -7,6 +7,7 @@ from src.jobs import (
     EXTRACT_VACANCY,
     LEXICON_EMBED,
     LEXICON_EXPAND,
+    LEXICON_JUDGE,
     PROCESS_FEED,
 )
 from src.services.worker import app as worker
@@ -53,5 +54,12 @@ async def ai_lexicon_expand() -> DataDict:
 @router.get('/api/ai/lexicon-embed')
 async def ai_lexicon_embed() -> DataDict:
     await worker.configure_task(LEXICON_EMBED).defer_async()
+
+    return {'result': 'ok'}
+
+
+@router.get('/api/ai/lexicon-judge')
+async def ai_lexicon_judge() -> DataDict:
+    await worker.configure_task(LEXICON_JUDGE).defer_async()
 
     return {'result': 'ok'}

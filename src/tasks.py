@@ -13,6 +13,7 @@ from src.jobs import (
     EXTRACT_VACANCY,
     LEXICON_EMBED,
     LEXICON_EXPAND,
+    LEXICON_JUDGE,
     PARSE_VACANCY,
     PROCESS_FEED,
 )
@@ -66,6 +67,16 @@ async def lexicon_expand() -> None:
 )
 async def lexicon_embed() -> None:
     await utils.process_lexicon_embedding()
+
+
+@app.task(
+    name=LEXICON_JUDGE,
+    queueing_lock='lexicon_judge',
+    lock='lexicon_judge',
+    retry=RetryStrategy(max_attempts=2, wait=30),
+)
+async def lexicon_judge() -> None:
+    await utils.process_lexicon_judging()
 
 
 @app.task(name=CHUNK_VACANCY, retry=RetryStrategy(max_attempts=2, wait=30))

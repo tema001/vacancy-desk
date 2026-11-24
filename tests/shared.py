@@ -14,6 +14,7 @@ from src.enums import (
     JobFamily,
     Seniority,
     SkillAliasStatus,
+    SkillDepth,
     SkillKind,
     SkillLexiconStatus,
     Source,
@@ -188,6 +189,38 @@ async def prepare_skill_alias(
             'is_reviewed': is_reviewed,
             'seen_count': seen_count,
         },
+    )
+
+
+async def prepare_vacancy_skill(
+    conn: AsyncConnection,
+    vacancy_id: str,
+    skill_name: str,
+    *,
+    depth: SkillDepth = SkillDepth.working,
+    importance: float = 0.5,
+) -> None:
+    await vacancy_db.insert_vacancy_skills(
+        conn,
+        data={
+            'vacancy_id': vacancy_id,
+            'skill_name': skill_name,
+            'depth': depth,
+            'importance': importance,
+        },
+    )
+
+
+async def prepare_profile_skill(
+    conn: AsyncConnection,
+    profile_id: str,
+    skill_name: str,
+    *,
+    depth: SkillDepth = SkillDepth.advanced,
+) -> None:
+    await vacancy_db.insert_profile_skills(
+        conn,
+        data={'profile_id': profile_id, 'skill_name': skill_name, 'depth': depth},
     )
 
 

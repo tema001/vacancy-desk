@@ -1,7 +1,7 @@
 import hashlib
 import json
 import re
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from contextlib import suppress
 from datetime import date
 from typing import Any, cast
@@ -27,13 +27,16 @@ from src.enums import (
 from src.geo import canonicalize
 from src.seniority import seniority_from_title
 from src.shared.resources import resources
-from src.shared.utils import dt_now
+from src.shared.utils import dt_now, normalize_skill_name
 from src.splitters import split_vacancy_text
 from src.types import (
     ExperiencePeriod,
     FullParsedPage,
     InactivePage,
+    JudgeItem,
+    JudgeVerdict,
     LexiconExpand,
+    LexiconJudge,
     ParsedPage,
     ParseJob,
     ProfileLLMExtract,
@@ -290,6 +293,8 @@ async def _sync_skills_into_lexicon[T: SkillExtract](
     if not extracted_skills:
         return []
 
+    # waits while the judge changes skill_lexicon
+    await db.lock_skill_lexicon_shared(conn)
     known = await db.select_skill_resolutions(conn, data=list(extracted_skills))
     unknown = [norm for norm in extracted_skills if norm not in known]
 
@@ -507,6 +512,188 @@ async def process_lexicon_expanding() -> None:
     else:
         with suppress(AlreadyEnqueued):
             await lexicon_embed.defer_async()
+
+
+def validate_judge_items(
+    items: Iterable[JudgeItem], sent: Iterable[str]
+) -> list[JudgeItem]:
+    valid: dict[str, JudgeItem] = {}
+    sent = set(sent)
+
+    for item in items:
+        if item.skill_name not in sent:
+            print('Lexicon judging. Unwanted skill in response!', item.skill_name)
+            continue
+        if item.skill_name in valid:
+            print('Lexicon judging. Duplicate skill in response!', item.skill_name)
+            continue
+
+        if item.verdict not in set(JudgeVerdict):
+            print('Lexicon judging. Unknown verdict!', item.skill_name, item.verdict)
+            continue
+        if item.verdict != JudgeVerdict.rejected and not item.canonical:
+            print('Lexicon judging. No canonical!', item.skill_name, item.verdict)
+            continue
+
+        valid[item.skill_name] = item
+
+    return list(valid.values())
+
+
+async def _reject_pending_skill(conn: AsyncConnection, original_name: str) -> None:
+    await db.delete_pending_skill_lexicon(conn, original_name)
+    await db.insert_skill_alias(
+        conn,
+        data={
+            'alias_name': original_name,
+            'skill_name': None,
+            'status': SkillAliasStatus.rejected,
+        },
+    )
+
+
+async def _alias_pending_skill(
+    conn: AsyncConnection, original_name: str, canonical: str
+) -> None:
+    await db.rename_vacancy_skill(conn, from_name=original_name, to_name=canonical)
+    await db.rename_profile_skill(conn, from_name=original_name, to_name=canonical)
+    await db.delete_pending_skill_lexicon(conn, original_name)
+    await db.insert_skill_alias(
+        conn,
+        data={
+            'alias_name': original_name,
+            'skill_name': canonical,
+            'status': SkillAliasStatus.alias,
+        },
+    )
+
+
+async def _accept_pending_skill(
+    conn: AsyncConnection, original_name: str, canonical: str
+) -> bool:
+    row = await db.select_skill_by_norm(conn, normalize_skill_name(canonical))
+    # canonical name is not exists, rename original name to canonical
+    # and create new alias for original skill name
+    if row is None:
+        await db.accept_pending_skill_lexicon(conn, original_name, new_name=canonical)
+        await db.insert_skill_alias(
+            conn,
+            data={
+                'alias_name': original_name,
+                'skill_name': canonical,
+                'status': SkillAliasStatus.alias,
+            },
+        )
+        return True
+
+    if row.is_rejected:
+        await _reject_pending_skill(conn, original_name)
+        return True
+
+    # already confirmed skill exists with canonical name
+    if row.is_canonical:
+        await _alias_pending_skill(conn, original_name, row.skill_name)
+        return True
+
+    # the same processed skill
+    if row.skill_name == original_name:
+        await db.accept_pending_skill_lexicon(conn, original_name, new_name=canonical)
+        return True
+
+    print(
+        'Lexicon judging. Canonical name found, but is pending too! Skip',
+        original_name,
+        canonical,
+    )
+    return False
+
+
+async def apply_judge_verdicts(conn: AsyncConnection, pending: list[JudgeItem]) -> int:
+    applied = 0
+
+    # new skills go first: an alias can point to a skill accepted in this batch
+    new_items = (i for i in pending if i.verdict == JudgeVerdict.new)
+    for item in new_items:
+        assert item.canonical
+        is_processed = await _accept_pending_skill(
+            conn, original_name=item.skill_name, canonical=item.canonical
+        )
+        if is_processed:
+            applied += 1
+
+    alias_items = (i for i in pending if i.verdict == JudgeVerdict.alias)
+    for item in alias_items:
+        assert item.canonical
+
+        row = await db.select_skill_by_norm(conn, normalize_skill_name(item.canonical))
+        if row and row.is_rejected:
+            await _reject_pending_skill(conn, item.skill_name)
+        elif row and row.is_canonical:
+            await _alias_pending_skill(conn, item.skill_name, row.skill_name)
+        else:
+            print(
+                'Lexicon judging. Canonical not found or pending! Skip',
+                item.skill_name,
+                item.canonical,
+            )
+            continue
+
+        applied += 1
+
+    rej_items = (i for i in pending if i.verdict == JudgeVerdict.rejected)
+    for item in rej_items:
+        await _reject_pending_skill(conn, item.skill_name)
+        applied += 1
+
+    return applied
+
+
+async def process_lexicon_judging() -> None:
+    prompt = resources.get_prompt('lexicon-judge')
+    limit = 10
+
+    async with resources.engine.connect() as conn:
+        rows = await db.select_pending_skill_names(conn, limit=limit)
+        if not rows:
+            return
+
+        batch = rows[:limit]
+        titles = await db.select_vacancy_titles_for_skills(conn, skill_names=batch)
+        canonical_skills = await db.select_canonical_skill_names(conn)
+
+    compiled_prompt = prompt.compile(
+        candidates=[
+            {'skill_name': name, 'titles': titles.get(name, [])} for name in batch
+        ],
+        canonical_skills=canonical_skills,
+    )
+    with propagate_attributes(prompt=prompt, trace_name=prompt.name):
+        resp = await resources.llm.responses.create(
+            model=prompt.config['model'],
+            input=openai_input(compiled_prompt),
+            text=JSON_TEXT,
+            reasoning=LOW_REASONING,
+        )
+
+    raw_resp = resp.output_text
+    if not raw_resp:
+        raise RuntimeError('Lexicon judging. LLM response is empty!')
+
+    data = LexiconJudge.model_validate_json(raw_resp)
+    if not data.items:
+        raise RuntimeError('Lexicon judging. Items is empty!')
+
+    pending = validate_judge_items(data.items, sent=batch)
+
+    async with resources.engine.begin() as conn:
+        await db.lock_skill_lexicon(conn)
+        applied = await apply_judge_verdicts(conn, pending)
+
+    from src.tasks import lexicon_judge
+
+    if len(rows) > limit and applied:
+        with suppress(AlreadyEnqueued):
+            await lexicon_judge.defer_async()
 
 
 async def _write_vacancy_chunks(conn: AsyncConnection, row: Mapping[Any, Any]) -> bool:
