@@ -1,0 +1,897 @@
+[
+  {
+    "vacancy_id": "01a0c47b-2c82-7958-81da-05f88c5878aa",
+    "must": [
+      "Python",
+      "Test automation",
+      "API testing",
+      "SQL",
+      "CI/CD",
+      "Kafka",
+      "Linux"
+    ],
+    "ok": [
+      "PostgreSQL",
+      "MySQL",
+      "AWS Kinesis",
+      "Cucumber",
+      "Behave",
+      "GitHub Actions",
+      "Jenkins",
+      "OpenRTB",
+      "VAST",
+      "AI-assisted development",
+      "AWS",
+      "Playwright",
+      "Cypress"
+    ]
+  },
+  {
+    "vacancy_id": "01a1cff1-7c3b-754c-90dc-ab6b354063eb",
+    "must": [
+      "Python",
+      "SQL",
+      "Google Cloud Platform",
+      "BigQuery"
+    ],
+    "ok": [
+      "Google Cloud Pub/Sub",
+      "Apache Airflow",
+      "Snowplow",
+      "OpenSnowcat",
+      "Conversions API",
+      "Event-driven architecture",
+      "Stream processing",
+      "Message queue",
+      "API integration",
+      "JavaScript",
+      "iOS",
+      "Shopify"
+    ]
+  },
+  {
+    "vacancy_id": "01a1cff1-7c3c-72a5-bcba-18a859ed591a",
+    "must": [
+      "Python",
+      "Django",
+      "Django REST Framework",
+      "REST",
+      "PostgreSQL",
+      "Celery",
+      "Redis",
+      "RabbitMQ",
+      "Docker",
+      "Nginx",
+      "AWS S3"
+    ],
+    "ok": [
+      "AWS",
+      "Large language models",
+      "Retrieval-augmented generation",
+      "AI agents",
+      "Elasticsearch",
+      "OpenSearch",
+      "FastAPI",
+      "WebSocket",
+      "PostGIS"
+    ]
+  },
+  {
+    "vacancy_id": "01a1b07f-f788-736e-8e8f-a2a2e105ff98",
+    "must": [
+      "Python",
+      "SQL"
+    ],
+    "ok": [
+      "TypeScript",
+      "JavaScript",
+      "iOS",
+      "React Native",
+      "Android",
+      "Google Cloud Platform",
+      "Google Cloud Pub/Sub",
+      "BigQuery",
+      "Apache Airflow",
+      "Snowplow",
+      "OpenSnowcat",
+      "Conversions API",
+      "Event-driven architecture",
+      "Stream processing",
+      "API integration",
+      "SDK development",
+      "Mobile analytics"
+    ]
+  },
+  {
+    "vacancy_id": "01a0f187-ee56-7dd5-894e-e33588f3b54b",
+    "must": [
+      "Python",
+      "pytest",
+      "Behave",
+      "boto3",
+      "Microservices",
+      "AWS",
+      "AWS Lambda",
+      "AWS DynamoDB",
+      "REST",
+      "OpenAPI"
+    ],
+    "ok": [
+      "AWS API Gateway",
+      "AWS Step Functions",
+      "AWS EventBridge",
+      "AWS DocumentDB",
+      "AWS IAM",
+      "AWS SAM",
+      "AWS Secrets Manager",
+      "AWS CodePipeline",
+      "Swagger",
+      "CI/CD"
+    ]
+  },
+  {
+    "vacancy_id": "01a102e8-0a9c-7471-9570-12fd1df29053",
+    "must": [
+      "Python",
+      "Scratch",
+      "Unity",
+      "Roblox Studio"
+    ],
+    "ok": [
+      "JavaScript",
+      "C#",
+      "Blender"
+    ]
+  },
+  {
+    "vacancy_id": "01a1b07f-f788-7195-bdda-e8d678bcef71",
+    "must": [
+      "Qucs-S",
+      "Circuit design",
+      "Circuit simulation",
+      "SPICE"
+    ],
+    "ok": [
+      "Circuit analysis",
+      "Electronics",
+      "EDA",
+      "Data annotation",
+      "Reinforcement learning from human feedback",
+      "Python",
+      "Panda3D"
+    ]
+  },
+  {
+    "vacancy_id": "01a18d50-40af-7d10-9b6a-c39c9a1b0e27",
+    "must": [
+      "Java",
+      "Apache Spark",
+      "SQL"
+    ],
+    "ok": [
+      "PySpark",
+      "Python",
+      "Batch processing",
+      "Data quality",
+      "ETL",
+      "CI/CD",
+      "Agile",
+      "Scrum"
+    ]
+  },
+  {
+    "vacancy_id": "01a18d50-40b0-7802-90e9-0daeef0bf429",
+    "must": [
+      "SQL",
+      "BigQuery",
+      "Google Cloud Platform",
+      "Dataform",
+      "Looker",
+      "LookML",
+      "Python",
+      "ETL",
+      "Data modeling"
+    ],
+    "ok": [
+      "Google Cloud Pub/Sub",
+      "Google Cloud Run",
+      "Google Cloud Storage",
+      "Datastream",
+      "Terraform",
+      "Infrastructure as Code",
+      "Machine learning",
+      "Anomaly detection",
+      "Large language models"
+    ]
+  },
+  {
+    "vacancy_id": "01a18d50-40b0-7336-91f3-936276761bfd",
+    "must": [
+      "Python",
+      "Django",
+      "Flask",
+      "Large language models",
+      "REST",
+      "PostgreSQL",
+      "MySQL",
+      "Linux"
+    ],
+    "ok": [
+      "OpenAI API",
+      "Anthropic API",
+      "Function calling",
+      "Structured output",
+      "DigitalOcean",
+      "PHP",
+      "Symfony",
+      "WordPress",
+      "HubSpot",
+      "Data deduplication",
+      "Database design"
+    ]
+  },
+  {
+    "vacancy_id": "01a18d50-40b0-7693-8b09-c7c2b8a0b6ff",
+    "must": [
+      "Python",
+      "asyncio",
+      "Multithreading",
+      "Linux",
+      "Docker",
+      "SQL",
+      "FastAPI",
+      "ClearML",
+      "Kubernetes"
+    ],
+    "ok": [
+      "React",
+      "CI/CD",
+      "GitHub Actions",
+      "AWS",
+      "AWS S3",
+      "Machine learning",
+      "MLOps",
+      "Unix"
+    ]
+  },
+  {
+    "vacancy_id": "01a043df-8b7a-7ef5-b245-b57f676f2d92",
+    "must": [
+      "Python",
+      "Computer vision",
+      "Machine learning",
+      "Deep learning",
+      "OpenCV",
+      "PyTorch",
+      "TensorFlow",
+      "Visual place recognition",
+      "Image processing"
+    ],
+    "ok": [
+      "Edge computing",
+      "NVIDIA Jetson",
+      "Raspberry Pi",
+      "Embedded system",
+      "OpenGL",
+      "OpenGL ES",
+      "Direct3D",
+      "3D rendering",
+      "Computational geometry",
+      "GIS",
+      "Model optimization"
+    ]
+  },
+  {
+    "vacancy_id": "01a1b158-3e61-71d8-af7d-6381b9d0d2a3",
+    "must": [
+      "Kubernetes",
+      "Terraform",
+      "TypeScript",
+      "Python",
+      "Distributed systems",
+      "Azure"
+    ],
+    "ok": [
+      "Infrastructure as Code"
+    ]
+  },
+  {
+    "vacancy_id": "01a0d476-1a46-74c5-91b0-58435ee16041",
+    "must": [
+      "Python",
+      "REST",
+      "Object-oriented programming",
+      "SQL",
+      "Test automation",
+      "CI/CD"
+    ],
+    "ok": [
+      "Unit testing",
+      "Integration testing",
+      "Distributed computing",
+      "C++",
+      "Java",
+      "Scala",
+      "Value at Risk",
+      "Expected Shortfall",
+      "FRTB",
+      "Market risk"
+    ]
+  },
+  {
+    "vacancy_id": "01a1cb56-6dc2-766a-97f4-a12ffdba481d",
+    "must": [
+      "Azure",
+      "Python",
+      "Infrastructure as Code",
+      "Network security",
+      "Azure Virtual Network",
+      "Azure Firewall",
+      "Azure Private Link",
+      "Azure ExpressRoute"
+    ],
+    "ok": [
+      "Azure Load Balancer",
+      "Azure Application Gateway",
+      "Azure VPN Gateway",
+      "Azure DNS",
+      "Pulumi",
+      "Terraform",
+      "Bicep",
+      "Docker",
+      "Kubernetes",
+      "Azure Kubernetes Service",
+      "CI/CD",
+      "KQL"
+    ]
+  },
+  {
+    "vacancy_id": "01a1cb56-6dc2-7812-ad92-b8f973bd62fc",
+    "must": [
+      "Python",
+      "Flask",
+      "SQLAlchemy",
+      "Celery",
+      "Redis",
+      "MySQL",
+      "Distributed systems"
+    ],
+    "ok": [
+      "TCP/IP",
+      "SaltStack",
+      "OpenTelemetry",
+      "Grafana",
+      "Grafana Loki",
+      "VictoriaMetrics",
+      "DNS",
+      "DHCP",
+      "IPv6",
+      "BGP",
+      "Virtual Private Cloud",
+      "IP address management"
+    ]
+  },
+  {
+    "vacancy_id": "01a1cb56-6dc2-78c3-87c2-cbf5a3d836d9",
+    "must": [
+      "Python",
+      "Django",
+      "Django REST Framework",
+      "REST",
+      "Celery",
+      "Redis",
+      "Docker",
+      "MySQL",
+      "unittest"
+    ],
+    "ok": [
+      "Unit testing",
+      "API testing",
+      "SQL",
+      "PostgreSQL",
+      "CI/CD",
+      "GitLab CI",
+      "Sentry",
+      "New Relic",
+      "Prometheus",
+      "Grafana",
+      "OpenAPI"
+    ]
+  },
+  {
+    "vacancy_id": "01a043ef-1e0b-7046-930b-b5b93890f525",
+    "must": [
+      "Python",
+      "Large language models",
+      "AI agents",
+      "JavaScript",
+      "PHP",
+      "Web scraping"
+    ],
+    "ok": [
+      "Search engine optimization",
+      "Programmatic SEO",
+      "A/B testing",
+      "API integration"
+    ]
+  },
+  {
+    "vacancy_id": "01a18d50-40b0-782b-b8ca-0c8accd6bed3",
+    "must": [
+      "SQL",
+      "BigQuery",
+      "Google Cloud Platform",
+      "Dataform",
+      "Looker",
+      "LookML",
+      "Python",
+      "ETL",
+      "Data modeling"
+    ],
+    "ok": [
+      "Google Cloud Pub/Sub",
+      "Google Cloud Run",
+      "Google Cloud Storage",
+      "Datastream",
+      "Terraform",
+      "Infrastructure as Code",
+      "Machine learning",
+      "Anomaly detection",
+      "Large language models",
+      "Distributed systems"
+    ]
+  },
+  {
+    "vacancy_id": "01a1cb56-6dc2-7947-8c46-7ae918945328",
+    "must": [
+      "Python",
+      "AWS",
+      "AWS Lambda",
+      "AWS DynamoDB",
+      "AWS EventBridge",
+      "AWS Step Functions",
+      "Pydantic",
+      "Infrastructure as Code",
+      "Terraform",
+      "SQL",
+      "Data modeling",
+      "Domain-driven design",
+      "Test-driven development"
+    ],
+    "ok": [
+      "Serverless",
+      "Event-driven architecture",
+      "Extreme Programming",
+      "Snowflake",
+      "GitHub Actions",
+      "CI/CD"
+    ]
+  },
+  {
+    "vacancy_id": "01a1cb56-6dc2-777e-9983-949db140218a",
+    "must": [
+      "Python",
+      "PostgreSQL",
+      "SQL",
+      "ETL",
+      "Apache Airflow",
+      "Data modeling",
+      "Embeddings",
+      "Semantic search",
+      "Vector search",
+      "Retrieval-augmented generation",
+      "Vector databases"
+    ],
+    "ok": [
+      "Snowflake",
+      "Snowflake Cortex",
+      "SQL query optimization",
+      "Distributed systems",
+      "Machine learning",
+      "API integration",
+      "Data engineering"
+    ]
+  },
+  {
+    "vacancy_id": "01a1d95c-7abf-7146-8d2d-ce2d1a8200f5",
+    "must": [
+      "Python",
+      "SQL",
+      "Unit testing"
+    ],
+    "ok": [
+      "Django",
+      "Oracle Database",
+      "Relational databases",
+      "Agile"
+    ]
+  },
+  {
+    "vacancy_id": "01a0f187-ee56-7e08-9d8f-2b64466af75c",
+    "must": [
+      "Python",
+      "Test automation",
+      "Page Object Model",
+      "Linux"
+    ],
+    "ok": [
+      "Unix",
+      "Windows",
+      "Manual testing",
+      "Scrum",
+      "Agile"
+    ]
+  },
+  {
+    "vacancy_id": "01a1cb56-6dc2-7799-801d-99bd4b5cc458",
+    "must": [
+      "Python"
+    ],
+    "ok": [
+      "AI agents"
+    ]
+  },
+  {
+    "vacancy_id": "01a1cb56-6dc2-784e-bb14-2d2f5ec41a9e",
+    "must": [
+      "Python",
+      "FastAPI",
+      "Large language models",
+      "Retrieval-augmented generation",
+      "LangGraph",
+      "LlamaIndex",
+      "Model Context Protocol",
+      "PostgreSQL",
+      "AWS",
+      "Terraform",
+      "CI/CD"
+    ],
+    "ok": [
+      "Function calling",
+      "Structured output",
+      "Hybrid search",
+      "Reranking",
+      "AWS CDK",
+      "Azure",
+      "Google Cloud Platform",
+      "Docker"
+    ]
+  },
+  {
+    "vacancy_id": "01a1cb56-6dc2-76b7-8f5f-4ea566d73e1c",
+    "must": [
+      "Machine learning",
+      "Deep learning",
+      "Multi-agent systems",
+      "AI agents",
+      "Model Context Protocol",
+      "n8n",
+      "Large language models",
+      "Prompt engineering"
+    ],
+    "ok": [
+      "Python",
+      "PyTorch",
+      "TensorFlow",
+      "LangGraph",
+      "CrewAI",
+      "AutoGen",
+      "AWS",
+      "Claude",
+      "CRM",
+      "MLOps"
+    ]
+  },
+  {
+    "vacancy_id": "01a0d8dd-b378-7ddd-8c64-aa625b9cd931",
+    "must": [
+      "Python",
+      "Flask",
+      "Web scraping",
+      "Beautiful Soup",
+      "PostgreSQL",
+      "Database design",
+      "Alembic",
+      "REST",
+      "Large language models",
+      "Prompt engineering"
+    ],
+    "ok": [
+      "SQLite",
+      "Flask-Migrate",
+      "httpx",
+      "requests",
+      "curl_cffi",
+      "OpenAPI",
+      "Swagger",
+      "Flask-Limiter",
+      "Structured output"
+    ]
+  },
+  {
+    "vacancy_id": "01a0f187-ee57-7111-9683-a8272dee77a0",
+    "must": [
+      "Python",
+      "SQL",
+      "Data warehouse",
+      "OLAP",
+      "Large language models",
+      "Retrieval-augmented generation",
+      "AI agents"
+    ],
+    "ok": [
+      "ClickHouse",
+      "BigQuery",
+      "Snowflake",
+      "AWS Redshift",
+      "Segment",
+      "RudderStack",
+      "PostHog",
+      "Braze",
+      "Customer.io",
+      "Recommendation systems",
+      "Identity resolution"
+    ]
+  },
+  {
+    "vacancy_id": "01a1b07f-f788-7332-958f-fb0c55b3b173",
+    "must": [
+      "Python",
+      "SQL",
+      "JavaScript",
+      "iOS"
+    ],
+    "ok": [
+      "React Native",
+      "Android",
+      "Mobile analytics",
+      "Google Cloud Platform",
+      "Google Cloud Pub/Sub",
+      "BigQuery",
+      "Apache Airflow",
+      "Stream processing",
+      "Conversions API",
+      "SDK development",
+      "Mobile attribution",
+      "Shopify"
+    ]
+  },
+  {
+    "vacancy_id": "01a0a482-5b03-7370-90ea-fcb1df4261eb",
+    "must": [
+      "Python",
+      "Test automation",
+      "Azure DevOps",
+      "CI/CD"
+    ],
+    "ok": [
+      "OPC",
+      "IEC 60870-5-104",
+      "Modbus",
+      "IEEE C37.118",
+      "Docker",
+      "Kubernetes",
+      "Behavior-driven development",
+      "Gherkin",
+      "ISTQB",
+      "Agile",
+      "Scrum",
+      "Performance testing",
+      "Zephyr Scale",
+      "Manual testing",
+      "Power systems"
+    ]
+  },
+  {
+    "vacancy_id": "01a1b07f-f788-73e4-9437-399a8019b1ac",
+    "must": [
+      "Python",
+      "SQL",
+      "JavaScript",
+      "iOS"
+    ],
+    "ok": [
+      "React Native",
+      "Android",
+      "Mobile analytics",
+      "Google Cloud Platform",
+      "SDK development"
+    ]
+  },
+  {
+    "vacancy_id": "01a14483-99c0-7c65-835a-c30eab56cebf",
+    "must": [
+      "Python",
+      "Node.js",
+      "TypeScript",
+      "REST",
+      "Webhooks",
+      "SQL",
+      "Large language models",
+      "AI agents",
+      "n8n"
+    ],
+    "ok": [
+      "SPF",
+      "DKIM",
+      "DMARC",
+      "Cloudflare",
+      "AWS Route 53",
+      "Function calling",
+      "Structured output",
+      "Zapier",
+      "Make"
+    ]
+  },
+  {
+    "vacancy_id": "01a14483-99c0-7da7-976d-e36733185212",
+    "must": [
+      "Python",
+      "Django"
+    ],
+    "ok": [
+      "REST",
+      "Webhooks",
+      "Pydantic",
+      "PostgreSQL",
+      "AWS",
+      "API integration"
+    ]
+  },
+  {
+    "vacancy_id": "01a18d50-40af-7b00-8dc9-bdd69c9ed11b",
+    "must": [
+      "Python",
+      "FastAPI",
+      "asyncio",
+      "PostgreSQL",
+      "SQLAlchemy",
+      "Alembic",
+      "REST",
+      "Webhooks",
+      "SQL"
+    ],
+    "ok": [
+      "Celery",
+      "Redis",
+      "AWS",
+      "Docker",
+      "Sentry",
+      "CI/CD",
+      "Payment integration",
+      "Test automation",
+      "Claude Code"
+    ]
+  },
+  {
+    "vacancy_id": "01a1b07f-f788-731b-9344-c2400ae1ab2a",
+    "must": [
+      "Python",
+      "SQL",
+      "Database design",
+      "Event-driven architecture",
+      "Stream processing"
+    ],
+    "ok": [
+      "Microservices",
+      "Message broker",
+      "Snowplow",
+      "OpenSnowcat",
+      "Conversions API",
+      "Shopify",
+      "Google Cloud Platform",
+      "Google Cloud Pub/Sub",
+      "BigQuery",
+      "Apache Airflow",
+      "API integration",
+      "Data modeling"
+    ]
+  },
+  {
+    "vacancy_id": "01a1b07f-f788-72d8-b0eb-e50b96206dad",
+    "must": [
+      "Python",
+      "JavaScript",
+      "iOS",
+      "Swift",
+      "Objective-C",
+      "SQL",
+      "SDK development"
+    ],
+    "ok": [
+      "Google Cloud Pub/Sub",
+      "Shopify",
+      "React Native",
+      "Android",
+      "Kotlin",
+      "Java",
+      "Google Cloud Platform",
+      "BigQuery",
+      "Apache Airflow",
+      "Mobile analytics",
+      "Event-driven architecture",
+      "Stream processing"
+    ]
+  },
+  {
+    "vacancy_id": "01a1b07f-f788-7263-aa98-aa7f0b24ff78",
+    "must": [
+      "Site reliability engineering",
+      "AWS",
+      "Incident management",
+      "Root cause analysis"
+    ],
+    "ok": [
+      "Kubernetes",
+      "Terraform",
+      "Infrastructure as Code",
+      "CI/CD",
+      "Distributed systems",
+      "AWS Bedrock",
+      "Honeycomb",
+      "Containerization"
+    ]
+  },
+  {
+    "vacancy_id": "01a12490-5c81-73ec-bb02-eca0b7d1aabe",
+    "must": [
+      "Python",
+      "TypeScript",
+      "Go",
+      "JavaScript"
+    ],
+    "ok": [
+      "Machine learning"
+    ]
+  },
+  {
+    "vacancy_id": "01a1cb56-6dc2-7894-add8-bff613015e3c",
+    "must": [
+      "C++",
+      "Python",
+      "Path planning",
+      "A*",
+      "RRT",
+      "Graph theory"
+    ],
+    "ok": [
+      "Theta*",
+      "Mathematical optimization",
+      "GeoJSON",
+      "Digital elevation model",
+      "GIS",
+      "Geospatial data",
+      "PyTorch",
+      "TensorFlow",
+      "Neural networks",
+      "Robotics",
+      "Motion planning"
+    ]
+  },
+  {
+    "vacancy_id": "01a1cb56-6dc2-7b87-891d-ba6205d95723",
+    "must": [
+      "Python",
+      "JavaScript",
+      "TypeScript",
+      "HTML",
+      "CSS",
+      "Svelte",
+      "React",
+      "Progressive web apps",
+      "Large language models",
+      "Retrieval-augmented generation"
+    ],
+    "ok": [
+      "SvelteKit",
+      "Responsive design",
+      "Prompt engineering",
+      "Function calling",
+      "Tailwind CSS",
+      "Service workers",
+      "AI agents",
+      "AWS",
+      "Serverless"
+    ]
+  }
+]

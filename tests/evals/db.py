@@ -7,7 +7,8 @@ from sqlalchemy.engine.result import RowMapping
 from sqlalchemy.ext.asyncio.engine import AsyncConnection
 from sqlalchemy.sql import func
 from src.db import TOKEN_RE, select_all
-from src.models import Vacancy, VacancyChunk
+from src.enums import SkillAliasStatus
+from src.models import SkillAlias, Vacancy, VacancyChunk
 
 
 async def select_vacancies_for_bm25_eval(
@@ -82,3 +83,24 @@ async def select_vacancy_for_similarities_eval(
             .limit(50)
         ),
     )
+
+
+async def select_vacancies_for_extract_eval(
+    conn: AsyncConnection, vacancy_ids: Iterable[str]
+) -> Sequence[RowMapping]:
+    return await select_all(
+        conn,
+        stmt=sa.select(
+            Vacancy.id, Vacancy.title, Vacancy.experience, Vacancy.description
+        ).where(Vacancy.id.in_(list(vacancy_ids))),
+    )
+
+
+async def select_skill_aliases_eval(conn: AsyncConnection) -> dict[str, str]:
+    rows = await select_all(
+        conn,
+        stmt=sa.select(SkillAlias.alias_name_norm, SkillAlias.skill_name).where(
+            SkillAlias.status == SkillAliasStatus.alias
+        ),
+    )
+    return {row['alias_name_norm']: row['skill_name'] for row in rows}
