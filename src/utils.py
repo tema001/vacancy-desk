@@ -4,13 +4,11 @@ import re
 from collections.abc import Iterable, Mapping
 from contextlib import suppress
 from datetime import date
-from typing import Any, cast
+from typing import Any
 
 import feedparser
 from httpx2 import HTTPStatusError
 from langfuse import propagate_attributes
-from openai.types.responses import ResponseInputParam, ResponseTextConfigParam
-from openai.types.shared_params.reasoning import Reasoning
 from parsel import Selector
 from procrastinate.exceptions import AlreadyEnqueued
 from sqlalchemy.ext.asyncio.engine import AsyncConnection
@@ -27,7 +25,13 @@ from src.enums import (
 from src.geo import canonicalize
 from src.seniority import seniority_from_title
 from src.shared.resources import resources
-from src.shared.utils import dt_now, normalize_skill_name
+from src.shared.utils import (
+    JSON_TEXT,
+    LOW_REASONING,
+    dt_now,
+    normalize_skill_name,
+    openai_input,
+)
 from src.splitters import split_vacancy_text
 from src.types import (
     ExperiencePeriod,
@@ -46,17 +50,6 @@ from src.types import (
 )
 
 CEFR_RE = re.compile(r'\b([ABC][12])\b', re.IGNORECASE)
-
-JSON_TEXT: ResponseTextConfigParam = {'format': {'type': 'json_object'}}
-LOW_REASONING: Reasoning = {'effort': 'low'}
-
-
-def openai_input(compiled: object) -> str | ResponseInputParam:
-    if isinstance(compiled, str):
-        return compiled
-    if isinstance(compiled, list):
-        return cast(ResponseInputParam, compiled)
-    raise TypeError(f'unexpected compiled prompt: {type(compiled).__name__}')
 
 
 async def process_feed(category: str) -> None:
@@ -687,13 +680,13 @@ async def process_lexicon_judging() -> None:
 
     async with resources.engine.begin() as conn:
         await db.lock_skill_lexicon(conn)
-        applied = await apply_judge_verdicts(conn, pending)
+        await apply_judge_verdicts(conn, pending)
 
-    from src.tasks import lexicon_judge
-
-    if len(rows) > limit and applied:
-        with suppress(AlreadyEnqueued):
-            await lexicon_judge.defer_async()
+    # from src.tasks import lexicon_judge
+    #
+    # if len(rows) > limit and applied:
+    #     with suppress(AlreadyEnqueued):
+    #         await lexicon_judge.defer_async()
 
 
 async def _write_vacancy_chunks(conn: AsyncConnection, row: Mapping[Any, Any]) -> bool:

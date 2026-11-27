@@ -275,4 +275,4 @@ if __name__ == '__main__':
             max_fn=None,
         ),
     )
-    asyncio.run(main(args.cloud_run))
+    asyncio.run(main(cloud_run=args.cloud_run))
